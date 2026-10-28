@@ -900,7 +900,14 @@
     callPeople({ op: 'info', name: name }).then(function (r) {
       if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
       if (!r.ok) { toast(peopleErr(r)); return; }
-      openDlg('<h2>「' + esc(name) + '」さんを削除しますか？</h2><p>今月とこれからの月のシートから、<b>名前と入力（' + r.total + '日分）</b>が消えます。過去の月は、そのまま残ります。</p>' +
+      function line(d) { return '<li>' + esc(d.sheet.replace(SHEET_SUFFIX, '')) + (d.keep ? '：入力が ' + d.days + '日分あるので、<b>そのまま残します</b>' : '：入力が無いので、<b>名前を消して、下の人を詰めます</b>') + '</li>'; }
+      var items = '<ul>' + r.sheets.map(line).join('') + '</ul>';
+      if (!r.removable) {
+        openDlg('<h2>「' + esc(name) + '」さんは、まだ削除できません</h2><p>入力が入っているシートでは、名前を残します。入力が無くなってから、もう一度削除してください。</p>' + items +
+          '<div class="btns"><button class="main" id="dCancel">閉じる</button></div>', function () { $('dCancel').onclick = closeDlg; });
+        return;
+      }
+      openDlg('<h2>「' + esc(name) + '」さんを削除しますか？</h2><p>今月とこれからの月のシートのうち、入力が入っているシートは残し、入力が無いシートだけ名前を消します。過去の月は、そのまま残ります。</p>' + items +
         '<div class="btns"><button class="dn" id="dDel">削除する</button><button id="dCancel">やめる</button></div>', function () {
         $('dCancel').onclick = closeDlg;
         $('dDel').onclick = function () {
@@ -908,8 +915,10 @@
           callPeople({ op: 'remove', name: name }).then(function (r2) {
             if (r2.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
             if (!r2.ok) { closeDlg(); toast(peopleErr(r2)); return; }
-            if (S.person === name) { S.person = null; resetInput(); }
-            afterPeople('削除しました');
+            var kept = r2.sheets.some(function (d) { return d.keep; });
+            afterPeople(kept ? '削除しました（入力のあるシートは、残しました）' : '削除しました').then(function () {
+              if (S.person === name && peopleList().indexOf(name) < 0) { S.person = null; resetInput(); ensurePerson(); render(); }
+            });
           }, function () { closeDlg(); toast('通信に失敗しました。もう一度お試しください'); });
         };
       });
