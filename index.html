@@ -131,7 +131,13 @@
   .mwrap .today { background: rgba(10,132,255,.18); }
   .mwrap th.today { color: #6cb2ff; background: #1f3350; }
   .mwrap .sun { background: #252527; color: var(--faint); }
+  .mwrap th.sun .dn { color: var(--danger); }          /* 日曜は、日にちだけ赤 */
+  .mwrap th.wed, .mwrap th.wed small { color: #7cc4ff; }   /* 水曜は、日にちと曜日の文字だけ薄い水色（列は塗らない） */
   .mwrap td { cursor: pointer; }
+
+  .hol { color: var(--danger); font-size: 10.5px; font-weight: 600; margin-left: 3px; border: 1px solid currentColor; border-radius: 4px; padding: 0 3px; line-height: 1.3; display: inline-block; }
+  .mwrap th small .hol { margin-left: 2px; }
+  .sum .hol { font-size: 11px; }
 
   /* 設定 */
   .back { background: transparent; color: var(--accent); font-size: 17px; padding: 6px 0; }
@@ -301,6 +307,50 @@
   function cmpDate(a, b) { return (a.y - b.y) || (a.m - b.m) || (a.d - b.d); }
   function sheetName(y, m) { return String(y).slice(-2) + '/' + (m < 10 ? '0' : '') + m + SHEET_SUFFIX; }
 
+  // ---- 祝日（日本の国民の祝日）。計算で出す。内閣府の一覧（2021〜2027年）と、dev/test.html で照合している -----
+  var holidayCache = {};
+  function nthMonday(y, m, n) { var first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); return 1 + ((1 - first + 7) % 7) + 7 * (n - 1); }
+  function holidaysOf(y) {                         // { m*100+d: 名前 }
+    if (holidayCache[y]) return holidayCache[y];
+    var h = {};
+    function add(m, d, name) { h[m * 100 + d] = name; }
+    var ys = y - 1980, sp = Math.floor(20.8431 + 0.242194 * ys - Math.floor(ys / 4)), au = Math.floor(23.2488 + 0.242194 * ys - Math.floor(ys / 4));
+    add(1, 1, '元日');
+    if (y >= 2000) add(1, nthMonday(y, 1, 2), '成人の日'); else add(1, 15, '成人の日');
+    if (y >= 1967) add(2, 11, '建国記念の日');
+    if (y >= 2020) add(2, 23, '天皇誕生日'); else if (y >= 1989 && y <= 2018) add(12, 23, '天皇誕生日');
+    add(3, sp, '春分の日');
+    add(4, 29, y >= 2007 ? '昭和の日' : 'みどりの日');
+    add(5, 3, '憲法記念日');
+    if (y >= 2007) add(5, 4, 'みどりの日');
+    add(5, 5, 'こどもの日');
+    if (y === 2020) add(7, 23, '海の日'); else if (y === 2021) add(7, 22, '海の日'); else if (y >= 2003) add(7, nthMonday(y, 7, 3), '海の日');
+    if (y === 2020) add(8, 10, '山の日'); else if (y === 2021) add(8, 8, '山の日'); else if (y >= 2016) add(8, 11, '山の日');
+    if (y >= 2003) add(9, nthMonday(y, 9, 3), '敬老の日');
+    add(9, au, '秋分の日');
+    if (y === 2020) add(7, 24, 'スポーツの日'); else if (y === 2021) add(7, 23, 'スポーツの日'); else if (y >= 2020) add(10, nthMonday(y, 10, 2), 'スポーツの日');
+    else if (y >= 2000) add(10, nthMonday(y, 10, 2), '体育の日'); else add(10, 10, '体育の日');
+    add(11, 3, '文化の日');
+    add(11, 23, '勤労感謝の日');
+    if (y >= 2007) {
+      var dow = function (m, d) { return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); };
+      Object.keys(h).map(Number).sort(function (a, b) { return a - b; }).forEach(function (k) {   // 日曜の祝日は、次の祝日でない日が「休日」（振替）
+        var m = Math.floor(k / 100), d = k % 100;
+        if (dow(m, d) !== 0) return;
+        var t = new Date(Date.UTC(y, m - 1, d + 1));
+        while (h[(t.getUTCMonth() + 1) * 100 + t.getUTCDate()]) t = new Date(t.getTime() + 86400000);
+        h[(t.getUTCMonth() + 1) * 100 + t.getUTCDate()] = '休日';
+      });
+      for (var dd = new Date(Date.UTC(y, 0, 2)); dd.getUTCFullYear() === y; dd = new Date(dd.getTime() + 86400000)) {   // 祝日にはさまれた平日は「休日」
+        var kk = (dd.getUTCMonth() + 1) * 100 + dd.getUTCDate(), pv = new Date(dd.getTime() - 86400000), nx = new Date(dd.getTime() + 86400000);
+        if (h[kk] || dd.getUTCDay() === 0) continue;
+        if (h[(pv.getUTCMonth() + 1) * 100 + pv.getUTCDate()] && nx.getUTCFullYear() === y && h[(nx.getUTCMonth() + 1) * 100 + nx.getUTCDate()]) h[kk] = '休日';
+      }
+    }
+    return holidayCache[y] = h;
+  }
+  function holidayName(p) { return holidaysOf(p.y)[p.m * 100 + p.d] || ''; }
+
   // ---- 状態 -----------------------------------------------------------------
   var S = {
     token: null, today: null, week: 1, person: null, tai: false,
@@ -321,7 +371,7 @@
     var out = [];
     for (var i = 0; i < 7; i++) {
       var p = addDays(base, i);
-      out.push({ idx: i, y: p.y, m: p.m, d: p.d, key: sheetName(p.y, p.m), closed: i === 6, past: cmpDate(p, S.today) < 0 });
+      out.push({ idx: i, y: p.y, m: p.m, d: p.d, key: sheetName(p.y, p.m), closed: i === 6, past: cmpDate(p, S.today) < 0, hol: holidayName(p) });
     }
     return out;
   }
@@ -591,7 +641,8 @@
     var day = S.tDay, key = sheetName(day.y, day.m), wi = weekdayIdx(day);
     $('tTitle').textContent = day.m + '/' + day.d + '（' + WD[wi] + '）';
     $('tBiz').hidden = cmpDate(day, S.today) !== 0;
-    var list = $('tList'), sum = $('tSum'); list.innerHTML = ''; sum.textContent = '';
+    var list = $('tList'), sum = $('tSum'), hn = holidayName(day); list.innerHTML = ''; sum.textContent = '';
+    if (hn) sum.innerHTML = '<b class="hol">祝</b> ' + esc(hn);
     function msg(t) { list.innerHTML = '<div class="empty">' + esc(t) + '</div>'; }
     if (wi === 6) { msg('定休日です'); return; }
     need(key);
@@ -606,7 +657,7 @@
     function byStart(a, b) { return startRank(a.v) - startRank(b.v); }
     cast.sort(byStart); tai.sort(byStart);
     var all = cast.concat(tai);
-    sum.innerHTML = '<b>' + all.length + '人</b> 出勤' + (tai.length ? ' ・ うち体入 ' + tai.length + '人' : '');
+    sum.innerHTML = (hn ? '<b class="hol">祝</b> ' + esc(hn) + ' ・ ' : '') + '<b>' + all.length + '人</b> 出勤' + (tai.length ? ' ・ うち体入 ' + tai.length + '人' : '');
     if (!all.length) { msg('出勤の入力は、まだありません'); return; }
     all.forEach(function (e) {
       var r = document.createElement('div'); r.className = 'row' + (e.tai ? ' tai' : '');
@@ -632,7 +683,8 @@
     var h = '<table><thead><tr><th class="n">' + mm.m + '月</th>';
     mo.days.forEach(function (d) {
       var wi = weekdayIdx({ y: mm.y, m: mm.m, d: d });
-      h += '<th class="' + (isNow && d === S.today.d ? 'today ' : '') + (wi === 6 ? 'sun' : '') + '">' + d + '<small>' + WD[wi] + '</small></th>';
+      var hn = holidayName({ y: mm.y, m: mm.m, d: d });
+      h += '<th class="' + (isNow && d === S.today.d ? 'today ' : '') + (wi === 6 ? 'sun' : '') + (wi === 2 ? 'wed' : '') + '"' + (hn ? ' title="' + esc(hn) + '"' : '') + '><span class="dn">' + d + '</span><small>' + WD[wi] + (hn ? '<b class="hol">祝</b>' : '') + '</small></th>';
     });
     h += '</tr></thead><tbody>';
     function cls(d) { var wi = weekdayIdx({ y: mm.y, m: mm.m, d: d }); return (isNow && d === S.today.d ? 'today ' : '') + (wi === 6 ? 'sun' : ''); }
@@ -702,7 +754,7 @@
       var d = document.createElement('div');
       d.className = 'day' + (info.usable ? '' : ' off') + (sel ? ' sel' : '') + (day.past ? ' past' : '');
       var h = '<span class="box">' + (sel ? '✓' : '') + '</span>' +
-              '<span class="d">' + WD[day.idx] + '<small>' + day.m + '/' + day.d + '</small></span><span class="vals">';
+              '<span class="d">' + WD[day.idx] + '<small>' + day.m + '/' + day.d + '</small>' + (day.hol ? '<b class="hol" title="' + esc(day.hol) + '">祝</b>' : '') + '</span><span class="vals">';
       if (!info.usable) {
         h += '<span class="pill">' + esc(info.note) + '</span>';
       } else if (nv !== undefined && S.tai) {
@@ -848,6 +900,8 @@
       case 'badname': return '名前を確かめてください（12文字まで。「=」「+」「-」「@」で始められません）';
       case 'notfound': return 'その名前が、シートに見つかりません。更新してください';
       case 'nosheet': return '今月以降のシートが、見つかりません';
+      case 'badsheet': return 'シートの形が想定と違うため、できませんでした（' + (r.sheet || '') + '）';
+      case 'hasformula': return 'この人の行に数式が入っているため、自動では詰められません（' + (r.sheet || '') + '）';
       default: return '保存できませんでした';
     }
   }
@@ -1016,7 +1070,7 @@
   }
 
   // 開発用：外から状態を見る（本番では使わない）
-  window.__shift = { S: S, plan: plan, weekDays: weekDays, dayInfo: dayInfo, openInput: openInput };
+  window.__shift = { S: S, plan: plan, weekDays: weekDays, dayInfo: dayInfo, openInput: openInput, holidayName: holidayName };
 
   if (MOCK) {
     var s = document.createElement('script');
