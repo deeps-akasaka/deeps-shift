@@ -22,26 +22,32 @@
   html, body { margin: 0; background: var(--bg); height: 100%; overflow: hidden; }
   body { color: var(--ink); font-family: -apple-system, "SF Pro Text", "Hiragino Sans", "Noto Sans JP", sans-serif;
     -webkit-text-size-adjust: 100%; overscroll-behavior: none; }
-  button { font-family: inherit; color: var(--ink); touch-action: manipulation; }
+  button { font-family: inherit; color: var(--ink); touch-action: manipulation; border: 0; }
   [hidden] { display: none !important; }
 
-  /* 1画面：上（人・週）／中（日付、残りの高さ）／下（入り・上がり・保存） */
+  /* 1画面：上／中（残りの高さ）／下。下に3つのタブ（今日・月・入力） */
   .app { max-width: 480px; height: 100vh; height: 100dvh; margin: 0 auto; display: flex; flex-direction: column; background: var(--bg); }
+  .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
-  .top { padding: calc(10px + env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left)); }
-  .row1 { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .who { display: flex; align-items: baseline; gap: 8px; border: 0; background: transparent; padding: 2px 0; min-width: 0; }
-  .who b { font-size: 26px; font-weight: 600; }
-  .who small { font-size: 12px; color: var(--sub); }
-  .who i { font-style: normal; color: var(--faint); font-size: 14px; }
-  .biz { font-size: 12px; color: var(--sub); background: var(--card); padding: 6px 12px; border: 0; border-radius: 999px; font-variant-numeric: tabular-nums; flex: none; }
-  .biz::after { content: "  ⋯"; color: var(--faint); }
-  .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--card); border-radius: 12px; padding: 3px; gap: 2px; }
-  .seg button { border: 0; background: transparent; padding: 8px 0; font-size: 14px; border-radius: 9px; }
+  .top { padding: calc(10px + env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left)); display: flex; align-items: center; gap: 10px; }
+  .top h1 { margin: 0; font-size: 22px; font-weight: 700; flex: 1; }
+  .gear { width: 40px; height: 40px; border-radius: 50%; background: var(--card); display: grid; place-items: center; flex: none; padding: 0; }
+  .gear svg { width: 22px; height: 22px; fill: none; stroke: #d1d1d6; stroke-width: 1.8; }
+  .seg { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--card); border-radius: 12px; padding: 3px; gap: 2px; }
+  .seg button { background: transparent; padding: 8px 0; font-size: 14px; border-radius: 9px; }
   .seg button.on { background: var(--seg-on); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
-  .notice { font-size: 12px; color: var(--sub); text-align: center; margin: 8px 0 0; }
+  .nav { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; }
+  .nav b { font-size: 22px; font-weight: 700; white-space: nowrap; }
+  .nav button { background: transparent; color: var(--sub); font-size: 26px; padding: 0 10px; line-height: 1; }
+  .nav small { font-size: 12px; color: var(--sub); background: var(--card); padding: 4px 10px; border-radius: 999px; margin-left: 6px; white-space: nowrap; }
+  .notice { font-size: 12px; color: var(--sub); text-align: center; margin: 0 14px 6px; }
 
-  /* 中：日付（1行を低く。足りなければ、中でスクロール） */
+  .tabbar { display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: #232325; border-top: 1px solid #38383a; }
+  .tabbar button { background: transparent; font-size: 11px; color: var(--sub); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 2px 0; }
+  .tabbar button.on { color: var(--accent); }
+  .tabbar svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+
+  /* 日付の行（入力） */
   .days { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)); background: var(--card); border-radius: 16px; }
   .day { position: relative; display: flex; align-items: center; padding: 0 12px 0 14px; min-height: 44px; cursor: pointer; }
   .day + .day::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; border-top: 1px solid var(--sep); }
@@ -62,12 +68,23 @@
   .day.off .box { border-style: dotted; }
   .day.off .pill { background: transparent; font-size: 12px; }
 
-  /* 下：入り・上がり・保存（画面の下に固定） */
-  .dock { padding: 10px max(14px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); }
-  .grp { display: flex; gap: 8px; margin-bottom: 8px; }
-  .lab { width: 40px; flex: none; font-size: 12px; color: var(--sub); padding-top: 11px; line-height: 1.2; }
+  /* 人（日付と時間の間）：名前を左右に流して選ぶ。「＋」は右に固定 */
+  .who { margin: 8px 0 0; padding: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)); display: flex; gap: 6px; align-items: center; }
+  .lab { width: 40px; flex: none; font-size: 12px; color: var(--sub); line-height: 1.2; }
+  .whoscroll { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .whoscroll::-webkit-scrollbar { display: none; }
+  .nm { flex: none; height: 34px; padding: 0 14px; border-radius: 999px; background: var(--pill); font-size: 15px; white-space: nowrap; }
+  .nm.on { background: var(--accent); font-weight: 700; }
+  .nm.tai { background: transparent; border: 1px dashed var(--faint); color: var(--sub); }
+  .nm.tai.on { border-style: solid; background: var(--accent); color: #fff; border-color: var(--accent); }
+  .nm.plus { background: transparent; border: 1px solid var(--faint); width: 44px; padding: 0; font-size: 20px; flex: none; }
+
+  /* 下：入り・上がり・保存 */
+  .dock { padding: 8px max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left)); }
+  .grp { display: flex; gap: 8px; margin-bottom: 6px; }
+  .grp .lab { padding-top: 11px; }
   .chips { flex: 1; display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; min-width: 0; }
-  .chip { border: 0; background: var(--pill); border-radius: 999px; height: 38px; font-size: 16px; font-variant-numeric: tabular-nums; padding: 0; }
+  .chip { height: 36px; border-radius: 999px; background: var(--pill); font-size: 16px; font-variant-numeric: tabular-nums; padding: 0; }
   .chip.dim { color: var(--sub); }
   .chip.on { background: var(--accent); font-weight: 700; }
   .chip.act { background: transparent; border: 1px solid var(--faint); font-size: 13px; }
@@ -79,17 +96,58 @@
   .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; transition: left .2s; box-shadow: 0 2px 4px rgba(0,0,0,.3); }
   .switch:checked { background: var(--accent); }
   .switch:checked::after { left: 22px; }
-  .savebar { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .savebar { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
   .preview { flex: 1; font-size: 12.5px; line-height: 1.45; color: var(--sub); min-width: 0; min-height: 36px; display: flex; align-items: center; }
   .preview > div { min-width: 0; }
   .preview b { color: var(--ink); font-weight: 600; }
   .preview .ow { color: var(--ink); }
   .preview .ow::before { content: "↻ "; color: var(--sub); }
   .preview .bad { color: var(--danger); }
-  .save { flex: none; width: 124px; height: 48px; border: 0; border-radius: 999px; background: var(--accent); font-size: 16px; font-weight: 700; }
+  .save { flex: none; width: 124px; height: 46px; border-radius: 999px; background: var(--accent); font-size: 16px; font-weight: 700; }
   .save.danger { background: var(--danger); }
   .save:disabled { background: var(--pill); color: var(--faint); }
-  @media (max-height: 700px) { .chip { height: 34px; } .day { min-height: 40px; } .save { height: 44px; } .top { padding-top: calc(6px + env(safe-area-inset-top)); } .who b { font-size: 22px; } }
+  @media (max-height: 700px) { .chip { height: 32px; } .day { min-height: 40px; } .save { height: 42px; } .top { padding-top: calc(6px + env(safe-area-inset-top)); } .nm { height: 30px; } .grp .lab { padding-top: 8px; } }
+
+  /* 今日 */
+  .sum { margin: 0 max(14px, env(safe-area-inset-left)) 8px; font-size: 13px; color: var(--sub); }
+  .sum b { color: var(--ink); font-size: 15px; }
+  .list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)); background: var(--card); border-radius: 16px; }
+  .row { position: relative; display: flex; align-items: center; min-height: 50px; padding: 0 14px; font-size: 17px; cursor: pointer; }
+  .row + .row::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; border-top: 1px solid var(--sep); }
+  .row .t { margin-left: auto; font-size: 16px; font-variant-numeric: tabular-nums; background: var(--pill); padding: 4px 12px; border-radius: 999px; white-space: nowrap; }
+  .row.tai .n { color: var(--sub); }
+  .empty { padding: 28px 16px; text-align: center; color: var(--sub); font-size: 14px; }
+  .hint { text-align: center; color: var(--faint); font-size: 12px; padding: 8px 0 10px; }
+
+  /* 月（案A：全員×日付。名前の列と日付の行は固定） */
+  .mwrap { flex: 1; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; margin: 0 0 0 max(14px, env(safe-area-inset-left)); background: var(--card); border-radius: 16px 0 0 16px; }
+  .mwrap table { border-collapse: separate; border-spacing: 0; }
+  .mwrap th, .mwrap td { height: 34px; width: 50px; min-width: 50px; text-align: center; font-size: 11.5px; border-top: 1px solid var(--sep); border-right: 1px solid #333335; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 400; padding: 0; }
+  .mwrap th { position: sticky; top: 0; background: var(--card); height: 46px; z-index: 2; font-size: 13px; line-height: 1.2; border-top: 0; }
+  .mwrap th small { display: block; font-size: 10.5px; color: var(--sub); }
+  .mwrap .n { position: sticky; left: 0; width: 64px; min-width: 64px; text-align: left; padding-left: 10px; font-size: 14px; background: var(--card); z-index: 1; font-weight: 600; }
+  .mwrap th.n { z-index: 3; color: var(--sub); font-size: 12px; font-weight: 400; }
+  .mwrap td.n.t { color: var(--sub); font-weight: 400; }
+  .mwrap .today { background: rgba(10,132,255,.18); }
+  .mwrap th.today { color: #6cb2ff; background: #1f3350; }
+  .mwrap .sun { background: #252527; color: var(--faint); }
+  .mwrap td { cursor: pointer; }
+
+  /* 設定 */
+  .back { background: transparent; color: var(--accent); font-size: 17px; padding: 6px 0; }
+  .sec { margin: 6px max(14px, env(safe-area-inset-left)) 0; font-size: 12px; color: var(--sub); padding-left: 6px; }
+  .add { margin: 8px max(14px, env(safe-area-inset-left)) 8px; height: 46px; border-radius: 14px; background: var(--card); color: var(--accent); font-size: 16px; font-weight: 600; }
+  .pl { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 0 max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left)); background: var(--card); border-radius: 16px; }
+  .pr { position: relative; display: flex; align-items: center; min-height: 44px; padding: 0 14px; font-size: 16px; }
+  .pr + .pr::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; border-top: 1px solid var(--sep); }
+  .pr span { margin-left: auto; display: flex; gap: 6px; }
+  .pr button { background: transparent; color: var(--accent); font-size: 14px; padding: 10px 8px; }
+  .pr button.d { color: var(--danger); }
+  .misc { margin: 12px max(14px, env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); background: var(--card); border-radius: 16px; }
+  .misc button { display: block; width: 100%; text-align: left; background: transparent; padding: 14px 16px; font-size: 16px; }
+  .misc button + button { border-top: 1px solid var(--sep); }
+  .misc button.r { color: var(--danger); }
+  .misc small { color: var(--sub); font-size: 12px; margin-left: 8px; }
 
   .toast { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: var(--pill); font-size: 14px; padding: 10px 18px; border-radius: 999px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; max-width: 90%; text-align: center; }
   .toast.show { opacity: 1; }
@@ -103,26 +161,22 @@
   .login .go { width: 100%; margin-top: 12px; font-size: 17px; font-weight: 700; padding: 17px; border: 0; border-radius: 999px; background: var(--accent); }
   .login .go:disabled { background: var(--pill); color: var(--faint); }
 
-  /* 下から出る一覧・ダイアログ */
+  /* 下から出るダイアログ */
   .veil { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 20; }
   .sheet { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 480px; background: var(--card); border-radius: 26px 26px 0 0; padding: 22px 18px calc(22px + env(safe-area-inset-bottom)); z-index: 21; }
   .sheet h2 { font-size: 18px; margin: 0 0 8px; }
-  .sheet h3 { margin: 0 0 12px 4px; font-size: 14px; color: var(--sub); font-weight: 400; }
   .sheet p { margin: 0 0 14px; color: var(--sub); font-size: 14px; line-height: 1.6; }
+  .sheet p b { color: var(--ink); }
   .sheet ul { list-style: none; padding: 0; margin: 0 0 16px; }
   .sheet li { padding: 10px 0; border-top: 1px solid var(--sep); font-size: 15px; font-variant-numeric: tabular-nums; }
   .sheet li s { color: var(--sub); }
+  .sheet .txt { width: 100%; font-size: 17px; padding: 14px 16px; border-radius: 14px; border: 0; background: var(--pill); color: var(--ink); outline: none; }
+  .sheet .msg { min-height: 20px; margin: 8px 4px 6px; font-size: 13px; color: var(--danger); }
   .sheet .btns { display: grid; gap: 10px; }
-  .sheet .btns button { font-size: 16px; padding: 15px; border: 0; border-radius: 16px; background: var(--pill); }
+  .sheet .btns button { font-size: 16px; padding: 15px; border-radius: 16px; background: var(--pill); }
   .sheet .btns button.main { background: var(--accent); font-weight: 700; }
   .sheet .btns button.danger { color: var(--danger); }
-  #picker, #pveil { display: none; }
-  #picker.open, #pveil.open { display: block; }
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .grid button { font-size: 15px; padding: 12px 0; border-radius: 14px; border: 0; background: var(--pill); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .grid button.on { background: var(--accent); font-weight: 600; }
-  .grid button.tai { grid-column: span 4; background: transparent; border: 1px dashed var(--faint); color: var(--sub); }
-  .grid button.tai.on { border-style: solid; background: var(--accent); color: #fff; border-color: var(--accent); }
+  .sheet .btns button.dn { background: var(--danger); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -136,35 +190,65 @@
 </div>
 
 <div class="app" id="appView" hidden>
-  <div class="top">
-    <div class="row1">
-      <button class="who" id="pchange"><b id="pname"></b><small id="psub"></small><i>▾</i></button>
-      <button class="biz" id="menuBtn"></button>
-    </div>
-    <div class="seg" id="seg">
-      <button data-w="0">今週</button><button data-w="1">来週</button><button data-w="2">再来週</button>
+
+  <!-- 入力 -->
+  <div class="page" id="pgInput">
+    <div class="top">
+      <div class="seg" id="seg"><button data-w="0">今週</button><button data-w="1">来週</button><button data-w="2">再来週</button></div>
+      <button class="gear" data-gear aria-label="設定"></button>
     </div>
     <p class="notice" id="notice" hidden></p>
+    <div class="days" id="days"></div>
+    <div class="who"><span class="lab">人</span><div class="whoscroll" id="who"></div><button class="nm plus" id="addBtn" aria-label="キャストを追加">＋</button></div>
+    <div class="dock">
+      <div class="grp" id="inGrp"><span class="lab">入り</span><div class="chips" id="inChips"></div></div>
+      <div class="grp" id="outGrp"><span class="lab">上がり</span><div class="chips" id="outChips"></div></div>
+      <div class="grp" id="taiGrp" hidden>
+        <span class="lab" id="retaiLab">再体</span>
+        <div class="taiopt">
+          <span class="sw" id="retaiSw"><input type="checkbox" class="switch" id="retai" aria-label="再体（再度体入）"></span>
+          <button class="chip act" id="clear">体入を消す</button>
+        </div>
+      </div>
+      <div class="savebar"><div class="preview" id="preview"></div><button class="save" id="save">保存</button></div>
+    </div>
   </div>
 
-  <div class="days" id="days"></div>
-
-  <div class="dock">
-    <div class="grp" id="inGrp"><span class="lab">入り</span><div class="chips" id="inChips"></div></div>
-    <div class="grp" id="outGrp"><span class="lab">上がり</span><div class="chips" id="outChips"></div></div>
-    <div class="grp" id="taiGrp" hidden>
-      <span class="lab" id="retaiLab">再体</span>
-      <div class="taiopt">
-        <span class="sw" id="retaiSw"><input type="checkbox" class="switch" id="retai" aria-label="再体（再度体入）"></span>
-        <button class="chip act" id="clear">体入を消す</button>
-      </div>
+  <!-- 今日 -->
+  <div class="page" id="pgToday" hidden>
+    <div class="top">
+      <div class="nav"><button id="tPrev" aria-label="前の日">‹</button><b id="tTitle"></b><button id="tNext" aria-label="次の日">›</button><small id="tBiz" hidden>営業日</small></div>
+      <button class="gear" data-gear aria-label="設定"></button>
     </div>
-    <div class="savebar"><div class="preview" id="preview"></div><button class="save" id="save">保存</button></div>
+    <div class="sum" id="tSum"></div>
+    <div class="list" id="tList"></div>
+    <div class="hint">名前をタップすると、その人とその日で入力が開きます</div>
+  </div>
+
+  <!-- 月 -->
+  <div class="page" id="pgMonth" hidden>
+    <div class="top">
+      <div class="nav"><button id="mPrev" aria-label="前の月">‹</button><b id="mTitle"></b><button id="mNext" aria-label="次の月">›</button></div>
+      <button class="gear" data-gear aria-label="設定"></button>
+    </div>
+    <div class="mwrap" id="mWrap"></div>
+    <div class="hint" id="mHint">セルをタップすると、その人とその日で入力が開きます</div>
+  </div>
+
+  <!-- 設定 -->
+  <div class="page" id="pgSettings" hidden>
+    <div class="top"><button class="back" id="sBack">‹ 戻る</button><h1 style="text-align:center;padding-right:48px">設定</h1></div>
+    <div class="sec" id="sCount"></div>
+    <button class="add" id="sAdd">＋ キャストを追加</button>
+    <div class="pl" id="sList"></div>
+    <div class="misc"><button id="sReload">最新の状態に更新<small id="sSync"></small></button><button class="r" id="sLogout">ログアウト（合言葉を消す）</button></div>
+  </div>
+
+  <div class="tabbar" id="tabbar">
+    <button data-tab="today"></button><button data-tab="month"></button><button data-tab="input"></button>
   </div>
 </div>
 
-<div class="veil" id="pveil"></div>
-<div class="sheet" id="picker"><h3>人を選ぶ</h3><div class="grid" id="pgrid"></div></div>
 <div class="toast" id="toast"></div>
 <div id="dlgRoot"></div>
 
@@ -220,6 +304,10 @@
   // ---- 状態 -----------------------------------------------------------------
   var S = {
     token: null, today: null, week: 1, person: null, tai: false,
+    tab: 'input', settings: false,   // 開いているタブ（today / month / input）と、設定画面
+    tDay: null, mMonth: null,        // 今日タブの日付、月タブの月
+    whoKey: '', mKey: '',
+
     months: {},                 // シート名 → { status, people, taiRows, cells, rowByName, days }
     sel: {},                    // 選んだ日（0〜6）
     draft: {},                  // 日ごとの下書き（0〜6）→ { i, o, maru, clear, retai }
@@ -263,7 +351,7 @@
       mo.status = 'ok'; mo.people = r.people; mo.taiRows = r.taiRows; mo.cells = r.cells; mo.days = r.days;
       mo.rowByName = {}; r.people.forEach(function (p) { mo.rowByName[p.name] = p.row; });
       S.lastSync = Date.now();
-    }).catch(function () { if (mo.status !== 'ok') mo.status = 'error'; if (silent) toast('更新できませんでした'); });
+    }).catch(function () { mo.checkedAt = Date.now(); if (mo.status !== 'ok') mo.status = 'error'; if (silent) toast('更新できませんでした'); });
   }
   function loadWeek(w, silent) {
     var seen = {};
@@ -273,9 +361,15 @@
       return loadMonth(d.key, silent);
     })).then(ensurePerson).then(render);
   }
+  // 今日・月タブ用：まだ読んでいないシートを読む（描画のたびに呼ぶので、読み込み中・直近の失敗は、もう一度読まない）
+  function need(key) {
+    var mo = S.months[key];
+    if (mo && (mo.status === 'ok' || mo.status === 'loading' || ((mo.status === 'none' || mo.status === 'error') && Date.now() - mo.checkedAt < 20000))) return;
+    loadMonth(key).then(render);
+  }
   function refreshAll() {
     var keys = Object.keys(S.months).filter(function (k) { return S.months[k].status === 'ok' || S.months[k].status === 'none'; });
-    return Promise.all(keys.map(function (k) { return loadMonth(k, true); })).then(function () { render(); });
+    return Promise.all(keys.map(function (k) { return loadMonth(k, true); })).then(function () { ensurePerson(); render(); });
   }
 
   // ---- 人 -------------------------------------------------------------------
@@ -393,13 +487,32 @@
   }
 
   // ---- 表示 -----------------------------------------------------------------
+  var ICON_GEAR = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2.4"/><path stroke-width="3.4" d="M12 2.6v3M12 18.4v3M2.6 12h3M18.4 12h3M5.4 5.4l2.1 2.1M16.5 16.5l2.1 2.1M5.4 18.6l2.1-2.1M16.5 7.5l2.1-2.1"/></svg>';
+  var TABS = {
+    today: ['今日', '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>'],
+    month: ['月', '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M3.5 9.5h17M9 9.5v10M15 9.5v10M3.5 14.5h17"/></svg>'],
+    input: ['入力', '<svg viewBox="0 0 24 24"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg>']
+  };
+
   function render() {
     if (!S.token) return;
-    var days = weekDays(S.week);
-    $('menuBtn').textContent = '営業日 ' + S.today.m + '/' + S.today.d + '（' + WD[weekdayIdx(S.today)] + '）';
+    var page = S.settings ? 'settings' : S.tab;
+    ['input', 'today', 'month', 'settings'].forEach(function (k) { $('pg' + k.charAt(0).toUpperCase() + k.slice(1)).hidden = (k !== page); });
+    $('tabbar').hidden = S.settings;
+    [].forEach.call($('tabbar').children, function (b) {
+      var k = b.getAttribute('data-tab');
+      b.className = k === S.tab ? 'on' : '';
+      if (!b.firstChild) b.innerHTML = TABS[k][1] + TABS[k][0];
+    });
+    [].forEach.call(document.querySelectorAll('[data-gear]'), function (g) { if (!g.firstChild) g.innerHTML = ICON_GEAR; });
+    if (page === 'input') renderInput();
+    else if (page === 'today') renderToday();
+    else if (page === 'month') renderMonth();
+    else renderSettings();
+  }
 
-    $('pname').textContent = S.tai ? '体入' : (S.person || '—');
-    $('psub').textContent = S.tai ? '名前なしの枠' : '';
+  function renderInput() {
+    var days = weekDays(S.week);
     [].forEach.call($('seg').children, function (b) { b.className = Number(b.getAttribute('data-w')) === S.week ? 'on' : ''; });
 
     // シートがない月のお知らせ
@@ -410,6 +523,7 @@
     nt.textContent = missing.length ? missing.join('、') + ' のシートが、まだありません' : '';
 
     renderDays(days);
+    renderWho();
     var del = S.tai && S.delMode;
     $('inGrp').hidden = del;
     $('outGrp').hidden = S.tai;
@@ -422,6 +536,148 @@
     $('clear').className = 'chip act' + (del ? ' on' : '');
     $('clear').textContent = del ? '消すのをやめる' : '体入を消す';
     renderPreview();
+  }
+
+  // 人の選択（日付と時間の間）：名前を左右に流す。選んでいる人は、見える位置に寄せる
+  function renderWho() {
+    var el = $('who'); el.innerHTML = '';
+    var cur = null;
+    peopleList().forEach(function (name) {
+      var b = document.createElement('button'); b.className = 'nm' + (!S.tai && S.person === name ? ' on' : ''); b.textContent = name;
+      b.onclick = function () { pickPerson(name); };
+      if (!S.tai && S.person === name) cur = b;
+      el.appendChild(b);
+    });
+    var t = document.createElement('button'); t.className = 'nm tai' + (S.tai ? ' on' : ''); t.textContent = '体入';
+    t.onclick = function () { pickPerson(null); };
+    if (S.tai) cur = t;
+    el.appendChild(t);
+    var key = S.tai ? '体入' : (S.person || '');
+    if (cur && S.whoKey !== key) { el.scrollLeft = cur.offsetLeft - (el.clientWidth - cur.offsetWidth) / 2; S.whoKey = key; }
+    else if (S.whoScroll != null) el.scrollLeft = S.whoScroll;
+    el.onscroll = function () { S.whoScroll = el.scrollLeft; };
+  }
+  function pickPerson(name) {                       // name が null なら体入
+    if (name === null ? S.tai : (!S.tai && S.person === name)) return;
+    guard(function () {
+      if (name === null) S.tai = true; else { S.person = name; S.tai = false; store.set(PERSON_KEY, name); }
+      resetInput(); render();
+    });
+  }
+
+  // 今日・月から、その人とその日を選んだ入力タブを開く（name が null なら体入）
+  function openInput(name, date) {
+    var mon = addDays(date, -weekdayIdx(date)), tmon = addDays(S.today, -weekdayIdx(S.today));
+    var w = Math.round((Date.UTC(mon.y, mon.m - 1, mon.d) - Date.UTC(tmon.y, tmon.m - 1, tmon.d)) / (7 * 86400000));
+    if (w < 0 || w > 2) { toast('入力できるのは、今週〜再来週です'); return; }
+    guard(function () {
+      S.tab = 'input'; S.settings = false;
+      if (name === null) S.tai = true; else { S.person = name; S.tai = false; store.set(PERSON_KEY, name); }
+      S.week = w; resetInput();
+      var idx = weekdayIdx(date); if (idx < 6) S.sel[idx] = 1;
+      render(); loadWeek(w);
+    });
+  }
+
+  // 今日：その日の出勤者を、入りの早い順に
+  function startRank(v) {                            // 並べ替えの値（数字の入り → 同 → 上がりだけ → 〇）
+    var m = v.match(/^(?:再体 )?(\d{1,2}(?:\.5)?)/);
+    if (m) return Number(m[1]);
+    if (v.charAt(0) === '同') return 100;
+    if (v.charAt(0) === '-') return 101;
+    return 102;
+  }
+  function renderToday() {
+    var day = S.tDay, key = sheetName(day.y, day.m), wi = weekdayIdx(day);
+    $('tTitle').textContent = day.m + '/' + day.d + '（' + WD[wi] + '）';
+    $('tBiz').hidden = cmpDate(day, S.today) !== 0;
+    var list = $('tList'), sum = $('tSum'); list.innerHTML = ''; sum.textContent = '';
+    function msg(t) { list.innerHTML = '<div class="empty">' + esc(t) + '</div>'; }
+    if (wi === 6) { msg('定休日です'); return; }
+    need(key);
+    var mo = S.months[key];
+    if (!mo || mo.status === 'loading') { msg('読み込み中 …'); return; }
+    if (mo.status === 'none') { msg(key + ' のシートが、まだありません'); return; }
+    if (mo.status === 'error') { msg('読み込めませんでした'); return; }
+    if (mo.days.indexOf(day.d) < 0) { msg('この日の列が、シートにありません'); return; }
+    var cast = [], tai = [];
+    mo.people.forEach(function (p) { var v = cell(mo, p.row, day.d); if (v) cast.push({ name: p.name, v: v }); });
+    mo.taiRows.forEach(function (r) { var v = cell(mo, r, day.d); if (v) tai.push({ name: '体入', v: v, tai: true }); });
+    function byStart(a, b) { return startRank(a.v) - startRank(b.v); }
+    cast.sort(byStart); tai.sort(byStart);
+    var all = cast.concat(tai);
+    sum.innerHTML = '<b>' + all.length + '人</b> 出勤' + (tai.length ? ' ・ うち体入 ' + tai.length + '人' : '');
+    if (!all.length) { msg('出勤の入力は、まだありません'); return; }
+    all.forEach(function (e) {
+      var r = document.createElement('div'); r.className = 'row' + (e.tai ? ' tai' : '');
+      r.innerHTML = '<span class="n">' + esc(e.name) + '</span><span class="t">' + esc(e.v === MARU ? MARU + ' 時間未定' : e.v) + '</span>';
+      r.onclick = function () { openInput(e.tai ? null : e.name, day); };
+      list.appendChild(r);
+    });
+  }
+
+  // 月（案A）：全員×日付。名前の列と日付の行は固定。最初は、今日が見える位置から
+  function renderMonth() {
+    var mm = S.mMonth, key = sheetName(mm.y, mm.m);
+    $('mTitle').textContent = mm.m + '月' + (mm.y !== S.today.y ? '（' + mm.y + '）' : '');
+    need(key);
+    var mo = S.months[key], wrap = $('mWrap');
+    function msg(t) { wrap.innerHTML = '<div class="empty">' + esc(t) + '</div>'; $('mHint').hidden = true; }
+    if (!mo || mo.status === 'loading') { msg('読み込み中 …'); return; }
+    if (mo.status === 'none') { msg(key + ' のシートが、まだありません'); return; }
+    if (mo.status === 'error') { msg('読み込めませんでした'); return; }
+    $('mHint').hidden = false;
+    var oldL = wrap.scrollLeft, oldT = wrap.scrollTop, same = S.mKey === key;
+    var isNow = mm.y === S.today.y && mm.m === S.today.m;
+    var h = '<table><thead><tr><th class="n">' + mm.m + '月</th>';
+    mo.days.forEach(function (d) {
+      var wi = weekdayIdx({ y: mm.y, m: mm.m, d: d });
+      h += '<th class="' + (isNow && d === S.today.d ? 'today ' : '') + (wi === 6 ? 'sun' : '') + '">' + d + '<small>' + WD[wi] + '</small></th>';
+    });
+    h += '</tr></thead><tbody>';
+    function cls(d) { var wi = weekdayIdx({ y: mm.y, m: mm.m, d: d }); return (isNow && d === S.today.d ? 'today ' : '') + (wi === 6 ? 'sun' : ''); }
+    mo.people.forEach(function (p) {
+      h += '<tr><td class="n">' + esc(p.name) + '</td>';
+      mo.days.forEach(function (d) {
+        var v = weekdayIdx({ y: mm.y, m: mm.m, d: d }) === 6 ? '' : cell(mo, p.row, d);
+        h += '<td class="' + cls(d) + '" data-p="' + esc(p.name) + '" data-d="' + d + '">' + esc(v) + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '<tr><td class="n t">体入</td>';
+    mo.days.forEach(function (d) {
+      var n = mo.taiRows.filter(function (r) { return cell(mo, r, d); }).length;
+      h += '<td class="' + cls(d) + '" data-p="" data-d="' + d + '" style="color:var(--sub)">' + (n ? n : '') + '</td>';
+    });
+    wrap.innerHTML = h + '</tr></tbody></table>';
+    wrap.onclick = function (e) {
+      var td = e.target.closest ? e.target.closest('td[data-d]') : null; if (!td) return;
+      var p = td.getAttribute('data-p'), d = Number(td.getAttribute('data-d'));
+      openInput(p === '' ? null : p, { y: mm.y, m: mm.m, d: d });
+    };
+    if (same) { wrap.scrollLeft = oldL; wrap.scrollTop = oldT; }
+    else { wrap.scrollLeft = isNow ? Math.max(0, (S.today.d - 3) * 50) : 0; wrap.scrollTop = 0; S.mKey = key; }
+  }
+
+  // 設定：人の管理（追加・名前の変更・削除）、更新、ログアウト
+  function fromKey() { return String(S.today.y).slice(-2) + '/' + (S.today.m < 10 ? '0' : '') + S.today.m; }
+  function settingsPeople() {
+    var mo = S.months[sheetName(S.today.y, S.today.m)];
+    if (mo && mo.status === 'ok') return mo.people.map(function (p) { return p.name; });
+    return peopleList();
+  }
+  function renderSettings() {
+    var names = settingsPeople();
+    $('sCount').textContent = '人の管理（' + names.length + '人 ・ 枠は21）';
+    var el = $('sList'); el.innerHTML = '';
+    names.forEach(function (n) {
+      var r = document.createElement('div'); r.className = 'pr';
+      r.innerHTML = esc(n) + '<span><button data-op="rename">変更</button><button class="d" data-op="remove">削除</button></span>';
+      r.querySelector('[data-op=rename]').onclick = function () { showRename(n); };
+      r.querySelector('[data-op=remove]').onclick = function () { showRemove(n); };
+      el.appendChild(r);
+    });
+    $('sSync').textContent = S.lastSync ? new Date(S.lastSync).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '';
   }
 
   function renderChips(el, vals, key, extras) {
@@ -584,14 +840,80 @@
       $('dForce').onclick = function () { closeDlg(); doSave(true); };
     });
   }
-  function showMenu() {
-    var t = S.lastSync ? new Date(S.lastSync).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '—';
-    openDlg('<h2>メニュー</h2><p>最後に読み込んだ時刻：' + t + '</p>' +
-      '<div class="btns"><button class="main" id="mReload">最新の状態に更新</button><button class="danger" id="mLogout">ログアウト（合言葉を消す）</button><button id="mClose">閉じる</button></div>', function () {
-      $('mClose').onclick = closeDlg;
-      $('mReload').onclick = function () { closeDlg(); toast('更新しています …'); refreshAll(); };
-      $('mLogout').onclick = function () { closeDlg(); logout(''); };
+  // ---- 人の管理 ---------------------------------------------------------------------
+  function peopleErr(r) {
+    switch (r && r.error) {
+      case 'exists': return '同じ名前が、すでにあります';
+      case 'full': return '名前の枠がいっぱいです（' + (r.sheet || '') + '）';
+      case 'badname': return '名前を確かめてください（12文字まで。「=」「+」「-」「@」で始められません）';
+      case 'notfound': return 'その名前が、シートに見つかりません。更新してください';
+      case 'nosheet': return '今月以降のシートが、見つかりません';
+      default: return '保存できませんでした';
+    }
+  }
+  function callPeople(body) {
+    return api({ api: 'people', token: S.token, from: fromKey(), op: body.op, name: body.name || '', newName: body.newName || '' });
+  }
+  function afterPeople(toastMsg) {
+    closeDlg(); toast(toastMsg);
+    return refreshAll();
+  }
+  function nameDialog(title, note, initial, okLabel, run) {
+    openDlg('<h2>' + esc(title) + '</h2><p>' + note + '</p><input class="txt" id="nameIn" maxlength="12" autocomplete="off" placeholder="名前"><div class="msg" id="nameMsg"></div>' +
+      '<div class="btns"><button class="main" id="dOk">' + esc(okLabel) + '</button><button id="dCancel">やめる</button></div>', function () {
+      var inp = $('nameIn'); inp.value = initial || '';
+      $('dCancel').onclick = closeDlg;
+      var busy = false;
+      $('dOk').onclick = function () {
+        var v = inp.value.trim(); if (!v || busy) return;
+        busy = true; $('nameMsg').textContent = '';
+        run(v).then(function (r) { busy = false; if (r) $('nameMsg').textContent = r; }, function () { busy = false; $('nameMsg').textContent = '通信に失敗しました。もう一度お試しください'; });
+      };
+      inp.onkeydown = function (e) { if (e.key === 'Enter') $('dOk').click(); };
+      setTimeout(function () { inp.focus(); }, 50);
     });
+  }
+  function showAdd() {
+    nameDialog('キャストを追加', '今月とこれからの月のシートに、名前の一番後ろへ足します。', '', '追加する', function (name) {
+      return callPeople({ op: 'add', name: name }).then(function (r) {
+        if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return null; }
+        if (!r.ok) return peopleErr(r);
+        return afterPeople('追加しました').then(function () {
+          if (!hasUnsaved()) { S.person = name; S.tai = false; store.set(PERSON_KEY, name); resetInput(); }
+          render(); return null;
+        });
+      });
+    });
+  }
+  function showRename(old) {
+    nameDialog('名前を変更', '「' + esc(old) + '」を、今月とこれからの月のシートで書き換えます。出勤の入力は、そのまま残ります。', old, '変更する', function (nn) {
+      if (nn === old) { closeDlg(); return Promise.resolve(null); }
+      return callPeople({ op: 'rename', name: old, newName: nn }).then(function (r) {
+        if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return null; }
+        if (!r.ok) return peopleErr(r);
+        if (S.person === old) { S.person = nn; store.set(PERSON_KEY, nn); }
+        return afterPeople('変更しました').then(function () { return null; });
+      });
+    });
+  }
+  function showRemove(name) {
+    callPeople({ op: 'info', name: name }).then(function (r) {
+      if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
+      if (!r.ok) { toast(peopleErr(r)); return; }
+      openDlg('<h2>「' + esc(name) + '」さんを削除しますか？</h2><p>今月とこれからの月のシートから、<b>名前と入力（' + r.total + '日分）</b>が消えます。過去の月は、そのまま残ります。</p>' +
+        '<div class="btns"><button class="dn" id="dDel">削除する</button><button id="dCancel">やめる</button></div>', function () {
+        $('dCancel').onclick = closeDlg;
+        $('dDel').onclick = function () {
+          $('dDel').disabled = true;
+          callPeople({ op: 'remove', name: name }).then(function (r2) {
+            if (r2.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
+            if (!r2.ok) { closeDlg(); toast(peopleErr(r2)); return; }
+            if (S.person === name) { S.person = null; resetInput(); }
+            afterPeople('削除しました');
+          }, function () { closeDlg(); toast('通信に失敗しました。もう一度お試しください'); });
+        };
+      });
+    }, function () { toast('通信に失敗しました。もう一度お試しください'); });
   }
 
   // ---- ログイン・ログアウト ---------------------------------------------------------
@@ -601,7 +923,7 @@
     setTimeout(function () { $('pin').focus(); }, 50);
   }
   function logout(msg) {
-    store.del(TOKEN_KEY); S.token = null; S.months = {}; S.sel = {}; S.draft = {}; S.taiDel = {}; S.delMode = false; S.person = null;
+    store.del(TOKEN_KEY); S.token = null; S.months = {}; S.sel = {}; S.draft = {}; S.taiDel = {}; S.delMode = false; S.person = null; S.settings = false; S.tab = 'input';
     closeDlg(); showLogin(msg);
   }
   function doLogin() {
@@ -620,7 +942,9 @@
   // ---- 開始 -----------------------------------------------------------------
   function start() {
     $('loginView').hidden = true; $('appView').hidden = false;
-    S.today = businessToday(); S.week = 1; resetInput();
+    S.today = businessToday(); S.week = 1; S.tab = 'input'; S.settings = false; S.whoKey = ''; S.mKey = '';
+    S.tDay = S.today; S.mMonth = { y: S.today.y, m: S.today.m };
+    resetInput();
     render();
     loadWeek(1).then(function () {
       // 来週のシートがまだ無い（月末など）ときは、今週を開く
@@ -641,19 +965,28 @@
     });
   }
 
-  function openPicker() { renderPicker(); $('picker').classList.add('open'); $('pveil').classList.add('open'); }
-  function closePicker() { $('picker').classList.remove('open'); $('pveil').classList.remove('open'); }
-
   function wire() {
     $('loginBtn').onclick = doLogin;
     $('pin').onkeydown = function (e) { if (e.key === 'Enter') doLogin(); };
-    $('menuBtn').onclick = showMenu;
-    $('pchange').onclick = openPicker;
-    $('pveil').onclick = closePicker;
+    [].forEach.call(document.querySelectorAll('[data-gear]'), function (g) { g.onclick = function () { S.settings = true; render(); }; });
+    $('sBack').onclick = function () { S.settings = false; render(); };
+    $('sAdd').onclick = showAdd;
+    $('addBtn').onclick = showAdd;
+    $('sReload').onclick = function () { toast('更新しています …'); refreshAll(); };
+    $('sLogout').onclick = function () { logout(''); };
+    $('tabbar').onclick = function (e) {
+      var b = e.target.closest ? e.target.closest('[data-tab]') : null; if (!b) return;
+      S.tab = b.getAttribute('data-tab'); render();
+    };
     $('seg').onclick = function (e) {
       var w = e.target.getAttribute('data-w'); if (w === null || Number(w) === S.week) return;
       guard(function () { S.week = Number(w); S.sel = {}; S.draft = {}; S.taiDel = {}; render(); loadWeek(S.week); });
     };
+    $('tPrev').onclick = function () { S.tDay = addDays(S.tDay, -1); render(); };
+    $('tNext').onclick = function () { S.tDay = addDays(S.tDay, 1); render(); };
+    $('tTitle').onclick = function () { S.tDay = S.today; render(); };
+    $('mPrev').onclick = function () { var m = S.mMonth; S.mMonth = m.m === 1 ? { y: m.y - 1, m: 12 } : { y: m.y, m: m.m - 1 }; render(); };
+    $('mNext').onclick = function () { var m = S.mMonth; S.mMonth = m.m === 12 ? { y: m.y + 1, m: 1 } : { y: m.y, m: m.m + 1 }; render(); };
     $('clear').onclick = function () { S.delMode = !S.delMode; S.taiDel = {}; S.sel = {}; render(); };
     $('retai').onchange = function () {
       var on = this.checked;
@@ -666,27 +999,6 @@
     });
   }
 
-  function renderPicker() {
-    var g = $('pgrid'); g.innerHTML = '';
-    peopleList().forEach(function (name) {
-      var b = document.createElement('button'); b.textContent = name;
-      if (!S.tai && S.person === name) b.className = 'on';
-      b.onclick = function () {
-        closePicker();
-        if (!S.tai && S.person === name) return;
-        guard(function () { S.person = name; S.tai = false; store.set(PERSON_KEY, name); resetInput(); render(); });
-      };
-      g.appendChild(b);
-    });
-    var t = document.createElement('button'); t.className = 'tai' + (S.tai ? ' on' : ''); t.textContent = '体入（名前なし）';
-    t.onclick = function () {
-      closePicker();
-      if (S.tai) return;
-      guard(function () { S.tai = true; resetInput(); render(); });
-    };
-    g.appendChild(t);
-  }
-
   function init() {
     wire();
     if (MOCK && !qs.has('login')) { S.token = 'mock'; start(); return; }   // 開発用：?mock&login でログイン画面も試せる
@@ -695,7 +1007,7 @@
   }
 
   // 開発用：外から状態を見る（本番では使わない）
-  window.__shift = { S: S, plan: plan, weekDays: weekDays, dayInfo: dayInfo };
+  window.__shift = { S: S, plan: plan, weekDays: weekDays, dayInfo: dayInfo, openInput: openInput };
 
   if (MOCK) {
     var s = document.createElement('script');
