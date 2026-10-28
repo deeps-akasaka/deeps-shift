@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>出勤UI 試作</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="出勤UI">
+<meta name="theme-color" content="#1a73e8">
+<style>
+  body { font-family: -apple-system, "Hiragino Sans", sans-serif; margin: 0; padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); background: #fff; color: #222; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  label { display: block; font-size: 13px; margin-bottom: 4px; }
+  input { font-size: 18px; padding: 10px; width: 100%; box-sizing: border-box; border: 1px solid #bbb; border-radius: 8px; }
+  button { font-size: 16px; padding: 12px; width: 100%; margin-top: 10px; border: 0; border-radius: 8px; background: #1a73e8; color: #fff; }
+  button.sub { background: #5f6368; }
+  .info { font-size: 12px; color: #555; margin: 10px 0; line-height: 1.6; }
+  pre { font-size: 12px; background: #f3f3f3; padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; }
+  .diag { background: #fff7e0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<h1>出勤UI 試作（画面を外に置く案）</h1>
+<div class="info" id="env"></div>
+<pre class="info diag" id="diag"></pre>
+
+<section id="loginView">
+  <label for="pin">PIN</label>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off">
+  <button id="loginBtn">ログイン</button>
+</section>
+
+<section id="mainView" hidden>
+  <div class="info" id="tokenInfo"></div>
+  <button id="pingBtn">通信テスト（合言葉の確認）</button>
+  <button id="logoutBtn" class="sub">ログアウト（合言葉を消す）</button>
+</section>
+
+<pre id="out">ここに結果が出ます</pre>
+
+<script>
+  // 呼び出す先（GAS の Web アプリ）。データは、PINが合わないと返らない
+  var GAS_URL = 'https://script.google.com/macros/s/AKfycbwTXHJyn-snXYxaDFA_oswrmNWJrm4wVedPw1gd25jqaKkZ6zLM-0rf8BzirZEujw/exec';
+  var KEY = 'shift-token';
+  var loadedAt = performance.now();
+
+  var out = document.getElementById('out');
+  var pinEl = document.getElementById('pin');
+
+  function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+  function del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+  // POST は text/plain で送る（application/json は、ブラウザの事前確認が通らない）
+  function api(body) {
+    return fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body)
+    }).then(function (r) { return r.json(); });
+  }
+
+  function show(msg) { out.textContent = msg; }
+
+  // 診断：開き直しても保存が残るか
+  (function () {
+    var n = Number(get('visits') || 0) + 1;
+    var first = get('first');
+    if (!first) { first = new Date().toLocaleString('ja-JP'); set('first', first); }
+    set('visits', String(n));
+    var standalone = (window.navigator.standalone === true) || window.matchMedia('(display-mode: standalone)').matches;
+    document.getElementById('env').textContent =
+      '画面の読み込み: ' + Math.round(loadedAt) + 'ms / ホーム画面から開いている: ' + (standalone ? 'はい' : 'いいえ');
+    document.getElementById('diag').textContent =
+      'origin: ' + location.origin + '\nlocalStorage: ' + n + '回目 / 最初の保存 ' + first;
+  })();
+
+  function render() {
+    var token = get(KEY);
+    var logged = !!token;
+    document.getElementById('loginView').hidden = logged;
+    document.getElementById('mainView').hidden = !logged;
+    if (logged) {
+      var exp = Number(token.split('.')[0]);
+      document.getElementById('tokenInfo').textContent =
+        'ログイン済み（合言葉の期限: ' + new Date(exp).toLocaleDateString('ja-JP') + '）';
+    }
+  }
+
+  document.getElementById('loginBtn').onclick = function () {
+    var started = performance.now();
+    show('ログインしています …');
+    api({ api: 'login', pin: pinEl.value }).then(function (r) {
+      var ms = Math.round(performance.now() - started);
+      if (r.ok) {
+        set(KEY, r.token);
+        pinEl.value = '';
+        render();
+        show('ログインできました（' + ms + 'ms）。合言葉を保存しました。');
+      } else if (r.error === 'locked') {
+        show('間違いが続いたため、しばらく入力できません（' + ms + 'ms）');
+      } else if (r.error === 'wrong') {
+        show('PINが違います。あと ' + r.remaining + ' 回で、しばらく入力できなくなります（' + ms + 'ms）');
+      } else {
+        show('エラー: ' + JSON.stringify(r));
+      }
+    }).catch(function (e) { show('通信に失敗しました: ' + e); });
+  };
+
+  document.getElementById('pingBtn').onclick = function () {
+    var started = performance.now();
+    show('通信しています …');
+    api({ api: 'ping', token: get(KEY) }).then(function (r) {
+      var ms = Math.round(performance.now() - started);
+      show('往復 ' + ms + 'ms\n' + JSON.stringify(r, null, 2) +
+        (r.authed ? '' : '\n※ 合言葉が無効です。ログインし直してください'));
+      if (!r.authed) { del(KEY); render(); }
+    }).catch(function (e) { show('通信に失敗しました: ' + e); });
+  };
+
+  document.getElementById('logoutBtn').onclick = function () {
+    del(KEY);
+    render();
+    show('合言葉を消しました');
+  };
+
+  render();
+</script>
+</body>
+</html>
