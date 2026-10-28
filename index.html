@@ -157,6 +157,7 @@
 
   .toast { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: var(--pill); font-size: 14px; padding: 10px 18px; border-radius: 999px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; max-width: 90%; text-align: center; }
   .toast.show { opacity: 1; }
+  .toast.pend { background: var(--accent); }
 
   /* ログイン */
   .login { max-width: 480px; margin: 0 auto; padding: calc(80px + env(safe-area-inset-top)) 24px 40px; }
@@ -256,6 +257,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="toast pend" id="pend">保存中 …</div>
 <div id="dlgRoot"></div>
 
 <script>
@@ -363,7 +365,8 @@
     draft: {},                  // 日ごとの下書き（0〜6）→ { i, o, maru, clear, retai }
     taiDel: {},                 // 体入の「消すもの」（'日の番号:行'）
     delMode: false,             // 体入を消すモード
-    saving: false, lastSync: 0, hiddenAt: 0
+    inflight: 0, queue: Promise.resolve(), abort: false, failMsg: '', pendingConflict: null,   // 保存の待ち行列
+    lastApi: 0, lastSync: 0, hiddenAt: 0
   };
 
   function weekDays(w) {
@@ -379,6 +382,7 @@
 
   // ---- 窓口（GAS）を呼ぶ ----------------------------------------------------------
   function api(body) {
+    S.lastApi = Date.now();
     if (MOCK && window.MOCK_API) return window.MOCK_API(body);
     var ctl = new AbortController();
     var timer = setTimeout(function () { ctl.abort(); }, 30000);
@@ -486,6 +490,7 @@
   function apply(fn) {                               // 選んでいる日だけに、下書きを入れる
     var days = selDays();
     if (!days.length) { toast('日付を選んでください'); return; }
+    if (Date.now() - S.lastApi > 40000) api({ api: 'ping', token: S.token }).catch(function () {});   // しばらく通信していなければ、GAS を起こしておく（保存の最初の1回を遅くしない）
     days.forEach(function (day) {
       var d = S.draft[day.idx] = S.draft[day.idx] || {};
       fn(d);
@@ -555,6 +560,7 @@
       if (!b.firstChild) b.innerHTML = TABS[k][1] + TABS[k][0];
     });
     [].forEach.call(document.querySelectorAll('[data-gear]'), function (g) { if (!g.firstChild) g.innerHTML = ICON_GEAR; });
+    $('pend').classList.toggle('show', S.inflight > 0);
     if (page === 'input') renderInput();
     else if (page === 'today') renderToday();
     else if (page === 'month') renderMonth();
@@ -797,7 +803,6 @@
     var who = S.tai ? '体入' : (S.person || '');
     function say(h) { pv.innerHTML = '<div>' + h + '</div>'; }
     sv.disabled = true; sv.textContent = '保存'; sv.className = 'save';
-    if (S.saving) { say('保存しています …'); sv.textContent = '保存しています'; return; }
     if (p.del) {
       if (!p.count) { say('消す体入を、タップして選んでください（日の欄で、その日の分を全部）'); return; }
       say('<b>体入</b> の ' + p.count + '件を <b>空（クリア）</b>にします<br><span class="ow">入力済みの ' + p.count + '件が消えます</span>');
@@ -841,37 +846,72 @@
   }
 
   // 下書きのある日すべてを、シートごとに1回で保存する。保存できたシートの日だけ、下書きと選択を消す
+  // 保存：押した瞬間に「保存した」表示にして、裏で順番に保存する。失敗したら、元に戻して知らせる
+  function setCell(key, row, day, v) {
+    var mo = S.months[key]; if (!mo) return;
+    mo.cells[row] = mo.cells[row] || {};
+    if (v) mo.cells[row][day] = v; else delete mo.cells[row][day];
+  }
+
   function doSave(force) {
     var p = plan();
-    if (S.saving || !p.count || p.problem) return;
-    S.saving = true; render();
-    var chain = Promise.resolve({ ok: true });
+    if (!p.count || p.problem) return;
+    var ctx = { person: S.person, tai: S.tai, week: S.week }, items = [];
     Object.keys(p.groups).forEach(function (k) {
       var g = p.groups[k]; if (!g.cells.length) return;
-      chain = chain.then(function (prev) {
-        if (!prev.ok) return prev;
-        return api({ api: 'save', token: S.token, sheet: k, name: S.tai ? null : S.person, cells: g.cells, force: !!force })
-          .then(function (r) {
-            r.key = k;
-            if (r.ok) {
-              applyUpdate(k, r.updated);
-              g.idxs.forEach(function (i) { delete S.draft[i]; delete S.sel[i]; });
-              g.dels.forEach(function (x) { delete S.taiDel[x]; });
-            }
-            return r;
-          });
-      });
+      var mo = S.months[k];
+      var it = { key: k, cells: g.cells, ctx: ctx, force: !!force, name: S.tai ? null : S.person, dels: g.dels.slice(), drafts: {},
+        prev: g.cells.map(function (c) { return { row: c.row, day: c.day, was: cell(mo, c.row, c.day), now: c.value === null ? '' : c.value }; }) };
+      g.idxs.forEach(function (i) { it.drafts[i] = { d: S.draft[i], sel: S.sel[i] }; });
+      items.push(it);
     });
-    chain.then(function (r) {
-      S.saving = false;
-      if (r.ok) { S.lastSync = Date.now(); toast('保存しました'); }
-      else if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
-      else if (r.error === 'conflict') showConflict(r);
-      else toast(errText(r));
-      render();
-    }).catch(function () {
-      S.saving = false; toast('通信に失敗しました。もう一度お試しください'); render();
+    items.forEach(function (it) {                    // 先に、保存した表示にする
+      it.prev.forEach(function (c) { setCell(it.key, c.row, c.day, c.now); });
+      Object.keys(it.drafts).forEach(function (i) { delete S.draft[i]; delete S.sel[i]; });
+      it.dels.forEach(function (x) { delete S.taiDel[x]; });
     });
+    S.inflight += items.length;
+    items.forEach(function (it) { S.queue = S.queue.then(function () { return runSave(it); }); });
+    render();
+  }
+
+  function runSave(it) {
+    if (S.abort) { rollback(it); return finishItem(); }          // 前の保存が失敗したら、あとの分は送らずに戻す
+    return api({ api: 'save', token: S.token, sheet: it.key, name: it.name, cells: it.cells, force: it.force }).then(function (r) {
+      if (r.ok) { applyUpdate(it.key, r.updated); S.lastSync = Date.now(); return finishItem(); }
+      S.abort = true;
+      if (r.error === 'auth') S.failMsg = 'auth';
+      else if (r.error === 'conflict') { r.key = it.key; S.pendingConflict = { it: it, r: r }; }
+      else S.failMsg = errText(r);
+      rollback(it);
+      return finishItem();
+    }, function () {
+      S.abort = true; S.failMsg = '通信に失敗しました。もう一度お試しください'; rollback(it);
+      return finishItem();
+    });
+  }
+
+  function sameCtx(it) { return S.person === it.ctx.person && S.tai === it.ctx.tai && S.week === it.ctx.week; }
+  function rollback(it) {                            // 表示と下書きを、保存する前に戻す
+    var mo = S.months[it.key]; if (!mo) return;
+    it.prev.forEach(function (c) { if (cell(mo, c.row, c.day) === c.now) setCell(it.key, c.row, c.day, c.was); });
+    if (!sameCtx(it)) { if (S.failMsg !== 'auth') S.failMsg = (it.name || '体入') + ' の保存ができませんでした。入力し直してください'; return; }   // 人や週が変わっていたら、下書きは戻さない
+    Object.keys(it.drafts).forEach(function (i) { var o = it.drafts[i]; if (!S.draft[i] && o.d) S.draft[i] = o.d; if (o.sel) S.sel[i] = o.sel; });
+    it.dels.forEach(function (x) { S.taiDel[x] = 1; });
+  }
+
+  function finishItem() {
+    S.inflight--;
+    if (S.inflight > 0) { render(); return; }
+    var abort = S.abort, msg = S.failMsg, pc = S.pendingConflict;
+    S.abort = false; S.failMsg = ''; S.pendingConflict = null;
+    if (!abort) { toast('保存しました'); render(); return; }
+    if (msg === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
+    if (pc && sameCtx(pc.it)) showConflict(pc.r);
+    else if (pc) toast((pc.it.name || '体入') + ' の保存ができませんでした（シートが変更されていました）。入力し直してください');
+    else if (msg) toast(msg);
+    refreshAll();                                    // シートの実際の状態に合わせ直す
+    render();
   }
 
   // ---- ダイアログ -------------------------------------------------------------------
