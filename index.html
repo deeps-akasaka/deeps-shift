@@ -41,6 +41,8 @@
   .nav button { background: transparent; color: var(--sub); font-size: 26px; padding: 0 10px; line-height: 1; }
   .nav small { font-size: 12px; color: var(--sub); background: var(--card); padding: 4px 10px; border-radius: 999px; margin-left: 6px; white-space: nowrap; }
   .notice { font-size: 12px; color: var(--sub); text-align: center; margin: 0 14px 6px; }
+  .mini { font-size: 12px; padding: 4px 12px; border-radius: 999px; background: var(--accent); margin-left: 6px; }
+  .mini:disabled { background: var(--pill); color: var(--faint); }
 
   .tabbar { display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: #232325; border-top: 1px solid #38383a; }
   .tabbar button { background: transparent; font-size: 11px; color: var(--sub); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 2px 0; }
@@ -204,7 +206,7 @@
       <div class="seg" id="seg"><button data-w="0">今週</button><button data-w="1">来週</button><button data-w="2">再来週</button></div>
       <button class="gear" data-gear aria-label="設定"></button>
     </div>
-    <p class="notice" id="notice" hidden></p>
+    <p class="notice" id="notice" hidden><span id="noticeText"></span> <button class="mini" id="mkBtn">作る</button></p>
     <div class="days" id="days"></div>
     <div class="who"><span class="lab">人</span><div class="whoscroll" id="who"></div><button class="nm plus" id="addBtn" aria-label="キャストを追加">＋</button></div>
     <div class="dock">
@@ -248,7 +250,7 @@
     <div class="sec" id="sCount"></div>
     <button class="add" id="sAdd">＋ キャストを追加</button>
     <div class="pl" id="sList"></div>
-    <div class="misc"><button id="sReload">最新の状態に更新<small id="sSync"></small></button><button class="r" id="sLogout">ログアウト（合言葉を消す）</button></div>
+    <div class="misc"><button id="sMake">来月のシートを作る<small>今月の次の月</small></button><button id="sReload">最新の状態に更新<small id="sSync"></small></button><button class="r" id="sLogout">ログアウト（合言葉を消す）</button></div>
   </div>
 
   <div class="tabbar" id="tabbar">
@@ -576,7 +578,7 @@
     days.forEach(function (d) { var mo = S.months[d.key]; if (mo && mo.status === 'none' && !seen[d.key]) { seen[d.key] = 1; missing.push(d.key); } });
     var nt = $('notice');
     nt.hidden = !missing.length;
-    nt.textContent = missing.length ? missing.join('、') + ' のシートが、まだありません' : '';
+    $('noticeText').textContent = missing.length ? missing.join('、') + ' のシートが、まだありません' : '';
 
     renderDays(days);
     renderWho();
@@ -684,10 +686,11 @@
     if (mo.status === 'none') { msg(key + ' のシートが、まだありません'); return; }
     if (mo.status === 'error') { msg('読み込めませんでした'); return; }
     $('mHint').hidden = false;
+    var dim = new Date(Date.UTC(mm.y, mm.m, 0)).getUTCDate(), mdays = mo.days.filter(function (d) { return d <= dim; });   // シートに残っている、その月に無い日（11月の31日など）は出さない
     var oldL = wrap.scrollLeft, oldT = wrap.scrollTop, same = S.mKey === key;
     var isNow = mm.y === S.today.y && mm.m === S.today.m;
     var h = '<table><thead><tr><th class="n">' + mm.m + '月</th>';
-    mo.days.forEach(function (d) {
+    mdays.forEach(function (d) {
       var wi = weekdayIdx({ y: mm.y, m: mm.m, d: d });
       var hn = holidayName({ y: mm.y, m: mm.m, d: d });
       h += '<th class="' + (isNow && d === S.today.d ? 'today ' : '') + (wi === 6 ? 'sun' : '') + (wi === 2 ? 'wed' : '') + '"' + (hn ? ' title="' + esc(hn) + '"' : '') + '><span class="dn">' + d + '</span><small>' + WD[wi] + (hn ? '<b class="hol">祝</b>' : '') + '</small></th>';
@@ -696,14 +699,14 @@
     function cls(d) { var wi = weekdayIdx({ y: mm.y, m: mm.m, d: d }); return (isNow && d === S.today.d ? 'today ' : '') + (wi === 6 ? 'sun' : ''); }
     mo.people.forEach(function (p) {
       h += '<tr><td class="n">' + esc(p.name) + '</td>';
-      mo.days.forEach(function (d) {
+      mdays.forEach(function (d) {
         var v = weekdayIdx({ y: mm.y, m: mm.m, d: d }) === 6 ? '' : cell(mo, p.row, d);
         h += '<td class="' + cls(d) + '" data-p="' + esc(p.name) + '" data-d="' + d + '">' + esc(v) + '</td>';
       });
       h += '</tr>';
     });
     h += '<tr><td class="n t">体入</td>';
-    mo.days.forEach(function (d) {
+    mdays.forEach(function (d) {
       var n = mo.taiRows.filter(function (r) { return cell(mo, r, d); }).length;
       h += '<td class="' + cls(d) + '" data-p="" data-d="' + d + '" style="color:var(--sub)">' + (n ? n : '') + '</td>';
     });
@@ -932,6 +935,22 @@
       $('dForce').onclick = function () { closeDlg(); doSave(true); };
     });
   }
+  // ---- 新しいシート（今月の次の月）を作る ----------------------------------------------------
+  var making = false;
+  function makeMonth() {
+    if (making) return; making = true;
+    $('mkBtn').disabled = true; $('sMake').disabled = true; toast('作っています …');
+    var body = { api: 'createMonth', token: S.token };
+    if (MOCK) body.mockToday = S.today.y % 100 * 100 + S.today.m;      // 開発用：偽の窓口に、今月を教える
+    api(body).then(function (r) {
+      making = false; $('mkBtn').disabled = false; $('sMake').disabled = false;
+      if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
+      if (!r.ok) { toast(r.error === 'badsheet' ? 'シートの形が想定と違うため、作れません（' + (r.sheet || '') + '）' : r.error === 'nosheet' ? '元になるシートが、見つかりません' : '作れませんでした'); return; }
+      toast(r.created ? '作りました（' + r.sheets.join('、') + '）' : '来月のシートは、もうあります（' + r.sheet + '）');
+      refreshAll().then(function () { return loadWeek(S.week); });
+    }, function () { making = false; $('mkBtn').disabled = false; $('sMake').disabled = false; toast('通信に失敗しました。もう一度お試しください'); });
+  }
+
   // ---- 人の管理 ---------------------------------------------------------------------
   function peopleErr(r) {
     switch (r && r.error) {
@@ -1075,6 +1094,8 @@
     $('sBack').onclick = function () { S.settings = false; render(); };
     $('sAdd').onclick = showAdd;
     $('addBtn').onclick = showAdd;
+    $('mkBtn').onclick = makeMonth;
+    $('sMake').onclick = makeMonth;
     $('sReload').onclick = function () { toast('更新しています …'); refreshAll(); };
     $('sLogout').onclick = function () { logout(''); };
     $('tabbar').onclick = function (e) {
