@@ -3,132 +3,674 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>出勤UI 試作</title>
+<meta name="color-scheme" content="dark">
+<title>出勤UI</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="出勤UI">
-<meta name="theme-color" content="#1a73e8">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1c1c1e">
 <style>
-  body { font-family: -apple-system, "Hiragino Sans", sans-serif; margin: 0; padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); background: #fff; color: #222; }
-  h1 { font-size: 18px; margin: 0 0 12px; }
-  label { display: block; font-size: 13px; margin-bottom: 4px; }
-  input { font-size: 18px; padding: 10px; width: 100%; box-sizing: border-box; border: 1px solid #bbb; border-radius: 8px; }
-  button { font-size: 16px; padding: 12px; width: 100%; margin-top: 10px; border: 0; border-radius: 8px; background: #1a73e8; color: #fff; }
-  button.sub { background: #5f6368; }
-  .info { font-size: 12px; color: #555; margin: 10px 0; line-height: 1.6; }
-  pre { font-size: 12px; background: #f3f3f3; padding: 10px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; }
-  .diag { background: #fff7e0; }
+  /* iPhone 標準アプリ（カレンダー）のダークモード風。色は「青」ひとつだけ（選んだもの・新しい値・保存） */
+  :root {
+    --bg: #1c1c1e; --card: #2c2c2e; --pill: #3a3a3c; --sep: #3a3a3c;
+    --ink: #ffffff; --sub: #98989d; --faint: #636366; --accent: #0a84ff; --seg-on: #636366; --danger: #ff453a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); }
+  body { color: var(--ink); font-family: -apple-system, "SF Pro Text", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    -webkit-text-size-adjust: 100%; overscroll-behavior-y: none; }
+  button { font-family: inherit; color: var(--ink); touch-action: manipulation; }
   [hidden] { display: none !important; }
+  .phone { max-width: 480px; min-height: 100vh; margin: 0 auto; padding-bottom: calc(210px + env(safe-area-inset-bottom)); }
+
+  header { padding: calc(16px + env(safe-area-inset-top)) 20px 4px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 22px; font-weight: 700; margin: 0; }
+  header .biz { font-size: 13px; color: var(--sub); background: var(--card); padding: 8px 14px; border: 0; border-radius: 999px; font-variant-numeric: tabular-nums; }
+  header .biz::after { content: "  ⋯"; color: var(--faint); }
+
+  section { padding: 20px 16px 0; }
+  .label { font-size: 13px; color: var(--sub); margin: 0 0 8px 6px; }
+  .group { background: var(--card); border-radius: 22px; }
+  .group.pad { padding: 14px; }
+  .notice { font-size: 13px; color: var(--sub); text-align: center; margin: 10px 0 0; line-height: 1.6; }
+
+  /* 人 */
+  .person { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 14px 20px; }
+  .person .name { font-size: 28px; font-weight: 600; min-height: 34px; }
+  .person .name small { font-size: 13px; font-weight: 400; color: var(--sub); margin-left: 10px; }
+  .btn-sm { font-size: 15px; padding: 9px 16px; border: 0; border-radius: 999px; background: var(--pill); }
+  .picker { display: none; margin-top: 10px; }
+  .picker.open { display: block; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .grid button { font-size: 15px; padding: 12px 0; border-radius: 14px; border: 0; background: var(--pill); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grid button.on { background: var(--accent); font-weight: 600; }
+  .grid button.tai { grid-column: span 4; background: transparent; border: 1px dashed var(--faint); color: var(--sub); }
+  .grid button.tai.on { border-style: solid; background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* 週 */
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--card); border-radius: 16px; padding: 4px; gap: 2px; }
+  .seg button { border: 0; background: transparent; padding: 11px 0; font-size: 15px; border-radius: 12px; }
+  .seg button.on { background: var(--seg-on); font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+  .range { font-size: 13px; color: var(--sub); text-align: center; margin: 10px 0 0; font-variant-numeric: tabular-nums; }
+
+  /* 日付の行 */
+  .days { overflow: hidden; }
+  .day { position: relative; display: flex; align-items: center; padding: 0 16px 0 18px; min-height: 60px; cursor: pointer; }
+  .day + .day::before { content: ""; position: absolute; top: 0; left: 18px; right: 0; border-top: 1px solid var(--sep); }
+  .day .box { width: 24px; height: 24px; border: 2px solid var(--faint); border-radius: 50%; margin-right: 14px; flex: none; display: grid; place-items: center; font-size: 13px; color: #fff; font-weight: 700; }
+  .day .d { width: 84px; font-size: 17px; flex: none; }
+  .day .d small { color: var(--sub); font-size: 13px; margin-left: 4px; font-variant-numeric: tabular-nums; }
+  .day.past .d { color: var(--sub); }
+  .day .pill { margin-left: auto; font-size: 16px; padding: 7px 14px; border-radius: 999px; background: var(--pill); font-variant-numeric: tabular-nums; min-width: 52px; text-align: center; white-space: nowrap; }
+  .day .pill.empty { color: var(--faint); background: transparent; }
+  .day.sel .box { background: var(--accent); border-color: var(--accent); }
+  .day .wrap { margin-left: auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .day .wrap .pill { margin-left: 0; }
+  .day .pill.was { background: transparent; color: var(--sub); text-decoration: line-through; padding-right: 0; }
+  .day .pill.new { background: var(--accent); font-weight: 700; }
+  .day .arrow { color: var(--faint); font-size: 13px; }
+  .day .ents { flex-wrap: wrap; justify-content: flex-end; gap: 6px; padding: 8px 0; }
+  .day .pill.ent { font-size: 15px; padding: 7px 12px; }
+  .day .pill.ent.del { background: var(--danger); font-weight: 700; }
+  .day.off { cursor: default; opacity: .45; }
+  .day.off .box { border-style: dotted; }
+  .day.off .pill { background: transparent; font-size: 13px; }
+
+  /* 入り・上がり */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { min-width: 54px; text-align: center; font-size: 17px; padding: 12px 14px; border-radius: 999px; border: 0; background: var(--pill); font-variant-numeric: tabular-nums; }
+  .chip.on { background: var(--accent); font-weight: 700; }
+  .chip.dim { color: var(--sub); }
+  .row-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row-btns.one { grid-template-columns: 1fr; }
+  .row-btns button { font-size: 15px; padding: 14px; border-radius: 16px; border: 0; background: var(--card); }
+  .row-btns button.on { background: var(--accent); font-weight: 700; }
+
+  /* 体入の「再体」スイッチ */
+  .switchrow { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; font-size: 17px; }
+  .switch { appearance: none; -webkit-appearance: none; width: 51px; height: 31px; border-radius: 999px; background: #48484a; position: relative; transition: background .2s; margin: 0; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; transition: left .2s; box-shadow: 0 2px 4px rgba(0,0,0,.3); }
+  .switch:checked { background: var(--accent); }
+  .switch:checked::after { left: 22px; }
+
+  /* 下の保存エリア */
+  .dock { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 480px; padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+    background: rgba(44,44,46,.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 26px 26px 0 0; }
+  .preview { font-size: 14px; line-height: 1.55; min-height: 44px; color: var(--sub); }
+  .preview b { color: var(--ink); font-weight: 600; }
+  .preview .ow { color: var(--ink); }
+  .preview .ow::before { content: "↻ "; color: var(--sub); }
+  .preview .bad { color: var(--danger); }
+  .save { width: 100%; margin-top: 8px; font-size: 17px; font-weight: 700; padding: 17px; border: 0; border-radius: 999px; background: var(--accent); }
+  .save.danger { background: var(--danger); }
+  .save:disabled { background: var(--pill); color: var(--faint); }
+
+  .toast { position: fixed; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: var(--pill); font-size: 14px; padding: 10px 18px; border-radius: 999px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 30; max-width: 90%; text-align: center; }
+  .toast.show { opacity: 1; }
+
+  /* ログイン */
+  .login { max-width: 480px; margin: 0 auto; padding: calc(80px + env(safe-area-inset-top)) 24px 40px; }
+  .login h1 { font-size: 30px; margin: 0 0 6px; }
+  .login p { color: var(--sub); margin: 0 0 28px; font-size: 14px; }
+  .login input { width: 100%; font-size: 22px; padding: 16px 18px; border-radius: 16px; border: 0; background: var(--card); color: var(--ink); letter-spacing: .3em; outline: none; }
+  .login .msg { min-height: 22px; margin: 12px 4px 0; font-size: 14px; color: var(--danger); }
+  .login .go { width: 100%; margin-top: 12px; font-size: 17px; font-weight: 700; padding: 17px; border: 0; border-radius: 999px; background: var(--accent); }
+  .login .go:disabled { background: var(--pill); color: var(--faint); }
+
+  /* ダイアログ（下から出る） */
+  .veil { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 20; }
+  .sheet { position: fixed; left: 50%; transform: translateX(-50%); bottom: 0; width: 100%; max-width: 480px; background: var(--card); border-radius: 26px 26px 0 0; padding: 22px 18px calc(22px + env(safe-area-inset-bottom)); z-index: 21; }
+  .sheet h2 { font-size: 18px; margin: 0 0 8px; }
+  .sheet p { margin: 0 0 14px; color: var(--sub); font-size: 14px; line-height: 1.6; }
+  .sheet ul { list-style: none; padding: 0; margin: 0 0 16px; }
+  .sheet li { padding: 10px 0; border-top: 1px solid var(--sep); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .sheet li s { color: var(--sub); }
+  .sheet .btns { display: grid; gap: 10px; }
+  .sheet .btns button { font-size: 16px; padding: 15px; border: 0; border-radius: 16px; background: var(--pill); }
+  .sheet .btns button.main { background: var(--accent); font-weight: 700; }
+  .sheet .btns button.danger { color: var(--danger); }
 </style>
 </head>
 <body>
-<h1>出勤UI 試作（画面を外に置く案）</h1>
-<div class="info" id="env"></div>
-<pre class="info diag" id="diag"></pre>
 
-<section id="loginView">
-  <label for="pin">PIN</label>
-  <input id="pin" type="password" inputmode="numeric" autocomplete="off">
-  <button id="loginBtn">ログイン</button>
-</section>
+<div class="login" id="loginView" hidden>
+  <h1>出勤UI</h1>
+  <p>PIN を入力してください</p>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="16" aria-label="PIN">
+  <div class="msg" id="loginMsg"></div>
+  <button class="go" id="loginBtn">ログイン</button>
+</div>
 
-<section id="mainView" hidden>
-  <div class="info" id="tokenInfo"></div>
-  <button id="pingBtn">通信テスト（合言葉の確認）</button>
-  <button id="logoutBtn" class="sub">ログアウト（合言葉を消す）</button>
-</section>
+<div class="phone" id="appView" hidden>
+  <header><h1>出勤UI</h1><button class="biz" id="menuBtn"></button></header>
 
-<pre id="out">ここに結果が出ます</pre>
+  <section>
+    <p class="label">人</p>
+    <div class="group person">
+      <div class="name" id="pname"></div>
+      <button class="btn-sm" id="pchange">変更</button>
+    </div>
+    <div class="group pad picker" id="picker"><div class="grid" id="pgrid"></div></div>
+  </section>
+
+  <section>
+    <div class="seg" id="seg">
+      <button data-w="0">今週</button><button data-w="1">来週</button><button data-w="2">再来週</button>
+    </div>
+    <p class="range" id="range"></p>
+    <p class="notice" id="notice" hidden></p>
+  </section>
+
+  <section style="padding-top:8px">
+    <p class="label">日付（タップで選ぶ・複数OK）</p>
+    <div class="group days" id="days"></div>
+  </section>
+
+  <section id="inSec">
+    <p class="label">入り</p>
+    <div class="group pad"><div class="chips" id="inChips"></div></div>
+  </section>
+
+  <section id="outSec">
+    <p class="label">上がり</p>
+    <div class="group pad"><div class="chips" id="outChips"></div></div>
+  </section>
+
+  <section id="taiSec" hidden>
+    <div class="group switchrow"><label for="retai">再体（再度体入）</label><input type="checkbox" class="switch" id="retai"></div>
+  </section>
+
+  <section>
+    <div class="row-btns" id="rowBtns">
+      <button id="maru">〇 時間未定</button>
+      <button id="clear">選んだ日をクリア</button>
+    </div>
+  </section>
+
+  <div class="dock">
+    <div class="preview" id="preview"></div>
+    <button class="save" id="save">保存</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="dlgRoot"></div>
 
 <script>
-  // 呼び出す先（GAS の Web アプリ）。データは、PINが合わないと返らない
+(function () {
+  'use strict';
+
+  // ---- 設定 ---------------------------------------------------------------
   var GAS_URL = 'https://script.google.com/macros/s/AKfycbwTXHJyn-snXYxaDFA_oswrmNWJrm4wVedPw1gd25jqaKkZ6zLM-0rf8BzirZEujw/exec';
-  var KEY = 'shift-token';
-  var loadedAt = performance.now();
+  var SHEET_SUFFIX = ' テスト';   // この段階では、名前に「テスト」を含むシートだけを使う
+  var TOKEN_KEY = 'shift-token';
+  var PERSON_KEY = 'shift-person';
+  var WD = ['月', '火', '水', '木', '金', '土', '日'];
+  var IN_VALS = ['8', '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12'];
+  var OUT_VALS = ['11', '11.5', '12', '12.5', '1', '1.5', '2', 'L'];
+  var MARU = '〇';               // 表と同じ「〇」（U+3007）
 
-  var out = document.getElementById('out');
-  var pinEl = document.getElementById('pin');
+  var qs = new URLSearchParams(location.search);
+  var MOCK = qs.has('mock');      // 開発用：偽の窓口で動かす（本番では使わない）
 
-  function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
-  function del(k) { try { localStorage.removeItem(k); } catch (e) {} }
-
-  // POST は text/plain で送る（application/json は、ブラウザの事前確認が通らない）
-  function api(body) {
-    return fetch(GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body)
-    }).then(function (r) { return r.json(); });
+  // ---- 小さな道具 -----------------------------------------------------------
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+    del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2400);
   }
 
-  function show(msg) { out.textContent = msg; }
+  // ---- 日付（営業日は、午前7時で切り替わる） ---------------------------------------
+  function jstParts(ms) {
+    var a = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms)).split('-');
+    return { y: +a[0], m: +a[1], d: +a[2] };
+  }
+  function businessToday() {
+    var o = qs.get('today');                       // 開発用：?today=2026-10-29
+    if (o && /^\d{4}-\d{2}-\d{2}$/.test(o)) { var a = o.split('-'); return { y: +a[0], m: +a[1], d: +a[2] }; }
+    return jstParts(Date.now() - 7 * 3600 * 1000);
+  }
+  function addDays(p, n) {
+    var dt = new Date(Date.UTC(p.y, p.m - 1, p.d + n));
+    return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate() };
+  }
+  function weekdayIdx(p) { return (new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay() + 6) % 7; }   // 月曜=0 … 日曜=6
+  function cmpDate(a, b) { return (a.y - b.y) || (a.m - b.m) || (a.d - b.d); }
+  function sheetName(y, m) { return String(y).slice(-2) + '/' + (m < 10 ? '0' : '') + m + SHEET_SUFFIX; }
 
-  // 診断：開き直しても保存が残るか
-  (function () {
-    var n = Number(get('visits') || 0) + 1;
-    var first = get('first');
-    if (!first) { first = new Date().toLocaleString('ja-JP'); set('first', first); }
-    set('visits', String(n));
-    var standalone = (window.navigator.standalone === true) || window.matchMedia('(display-mode: standalone)').matches;
-    document.getElementById('env').textContent =
-      '画面の読み込み: ' + Math.round(loadedAt) + 'ms / ホーム画面から開いている: ' + (standalone ? 'はい' : 'いいえ');
-    document.getElementById('diag').textContent =
-      'origin: ' + location.origin + '\nlocalStorage: ' + n + '回目 / 最初の保存 ' + first;
-  })();
+  // ---- 状態 -----------------------------------------------------------------
+  var S = {
+    token: null, today: null, week: 1, person: null, tai: false,
+    months: {},                 // シート名 → { status, people, taiRows, cells, rowByName, days }
+    sel: {},                    // 選んだ日（0〜6）
+    taiDel: {},                 // 体入の「消すもの」（'日の番号:行'）
+    inV: null, outV: null, maru: false, clear: false, retai: false,   // null＝まだ選んでいない、''＝「空」を選んだ
+    saving: false, lastSync: 0, hiddenAt: 0
+  };
 
+  function weekDays(w) {
+    var base = addDays(S.today, -weekdayIdx(S.today) + 7 * w);
+    var out = [];
+    for (var i = 0; i < 7; i++) {
+      var p = addDays(base, i);
+      out.push({ idx: i, y: p.y, m: p.m, d: p.d, key: sheetName(p.y, p.m), closed: i === 6, past: cmpDate(p, S.today) < 0 });
+    }
+    return out;
+  }
+  function cell(mo, row, day) { var r = mo.cells[row]; return (r && r[day]) || ''; }
+
+  // ---- 窓口（GAS）を呼ぶ ----------------------------------------------------------
+  function api(body) {
+    if (MOCK && window.MOCK_API) return window.MOCK_API(body);
+    var ctl = new AbortController();
+    var timer = setTimeout(function () { ctl.abort(); }, 30000);
+    return fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // application/json は、ブラウザの事前確認が通らない
+      body: JSON.stringify(body),
+      signal: ctl.signal
+    }).then(function (r) { clearTimeout(timer); return r.json(); }, function (e) { clearTimeout(timer); throw e; });
+  }
+
+  function loadMonth(key, silent) {
+    var mo = S.months[key] = S.months[key] || { status: 'loading' };
+    if (!silent || mo.status !== 'ok') mo.status = 'loading';
+    render();
+    return api({ api: 'getMonth', token: S.token, sheet: key }).then(function (r) {
+      if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
+      mo.checkedAt = Date.now();
+      if (!r.ok) { mo.status = (r.error === 'nosheet') ? 'none' : 'error'; return; }
+      mo.status = 'ok'; mo.people = r.people; mo.taiRows = r.taiRows; mo.cells = r.cells; mo.days = r.days;
+      mo.rowByName = {}; r.people.forEach(function (p) { mo.rowByName[p.name] = p.row; });
+      S.lastSync = Date.now();
+    }).catch(function () { if (mo.status !== 'ok') mo.status = 'error'; if (silent) toast('更新できませんでした'); });
+  }
+  function loadWeek(w, silent) {
+    var seen = {};
+    return Promise.all(weekDays(w).filter(function (d) { if (seen[d.key]) return false; seen[d.key] = 1; return true; }).map(function (d) {
+      var mo = S.months[d.key];
+      if (!silent && mo && (mo.status === 'ok' || (mo.status === 'none' && Date.now() - mo.checkedAt < 20000))) return null;
+      return loadMonth(d.key, silent);
+    })).then(ensurePerson).then(render);
+  }
+  function refreshAll() {
+    var keys = Object.keys(S.months).filter(function (k) { return S.months[k].status === 'ok' || S.months[k].status === 'none'; });
+    return Promise.all(keys.map(function (k) { return loadMonth(k, true); })).then(function () { render(); });
+  }
+
+  // ---- 人 -------------------------------------------------------------------
+  function peopleList() {
+    var list = null;
+    weekDays(S.week).forEach(function (d) { var mo = S.months[d.key]; if (!list && mo && mo.status === 'ok') list = mo.people; });
+    if (!list) Object.keys(S.months).forEach(function (k) { var mo = S.months[k]; if (!list && mo.status === 'ok') list = mo.people; });
+    return (list || []).map(function (p) { return p.name; });
+  }
+  function ensurePerson() {
+    var list = peopleList();
+    if (S.person && list.indexOf(S.person) >= 0) return;
+    var saved = store.get(PERSON_KEY);
+    S.person = (saved && list.indexOf(saved) >= 0) ? saved : (list[0] || null);
+  }
+
+  // ---- 日ごとの今の値 ---------------------------------------------------------------
+  function dayInfo(day) {
+    var info = { day: day, cur: '', usable: false, note: '', row: 0 };
+    if (day.closed) { info.note = '定休日'; return info; }
+    var mo = S.months[day.key];
+    if (!mo || mo.status === 'loading') { info.note = '読み込み中'; return info; }
+    if (mo.status === 'none') { info.note = 'シートなし'; return info; }
+    if (mo.status === 'error') { info.note = '読めません'; return info; }
+    if (mo.days.indexOf(day.d) < 0) { info.note = '日付なし'; return info; }
+    if (S.tai) {
+      if (!mo.taiRows.length) { info.note = '体入の枠なし'; return info; }
+      info.entries = mo.taiRows.map(function (r) { return { row: r, v: cell(mo, r, day.d) }; }).filter(function (e) { return e.v; });
+      info.cur = info.entries.map(function (e) { return e.v; }).join(' / ');
+      info.usable = true;
+    } else {
+      var row = mo.rowByName[S.person];
+      if (!row) { info.note = '名前なし'; return info; }
+      info.row = row; info.cur = cell(mo, row, day.d); info.usable = true;
+    }
+    return info;
+  }
+
+  // 書き込む値（null＝空にする、undefined＝まだ決まっていない）
+  function newValue() {
+    if (S.clear) return null;
+    if (S.maru && !S.tai) return MARU;
+    if (S.tai) return S.inV ? ((S.retai ? '再体 ' : '') + S.inV) : undefined;
+    var i = S.inV, o = S.outV;
+    if (!i && !o) return undefined;
+    if (i && !o) return i;                 // 入りだけ（ハイフンなし）
+    if (!i && o) return '-' + o;           // 上がりだけ
+    return i + '-' + o;
+  }
+
+  // 保存する内容を組み立てる
+  function plan() {
+    var nv = newValue(), groups = {}, count = 0, ow = 0, problem = '';
+    if (S.tai && S.clear) {                       // 体入：選んだ1件ずつを消す
+      weekDays(S.week).forEach(function (day) {
+        var info = dayInfo(day); if (!info.usable) return;
+        info.entries.forEach(function (e) {
+          if (!S.taiDel[day.idx + ':' + e.row]) return;
+          var g = groups[day.key] = groups[day.key] || { key: day.key, cells: [] };
+          g.cells.push({ row: e.row, day: day.d, expect: e.v }); count++; ow++;
+        });
+      });
+      return { nv: null, groups: groups, count: count, ow: ow, problem: '' };
+    }
+    weekDays(S.week).forEach(function (day) {
+      if (!S.sel[day.idx]) return;
+      var info = dayInfo(day); if (!info.usable) return;
+      var mo = S.months[day.key];
+      var g = groups[day.key] = groups[day.key] || { key: day.key, cells: [] };
+      if (!S.tai) {
+        g.cells.push({ row: info.row, day: day.d, expect: info.cur }); count++;
+        if (info.cur && info.cur !== (nv === null ? '' : nv)) ow++;
+      } else if (nv !== undefined) {
+        var free = null;
+        mo.taiRows.forEach(function (r) { if (free === null && !cell(mo, r, day.d)) free = r; });
+        if (free === null) problem = day.m + '/' + day.d + ' は、体入の枠が埋まっています';
+        else { g.cells.push({ row: free, day: day.d, expect: '' }); count++; }
+      }
+    });
+    return { nv: nv, groups: groups, count: count, ow: ow, problem: problem };
+  }
+
+  // ---- 表示 -----------------------------------------------------------------
   function render() {
-    var token = get(KEY);
-    var logged = !!token;
-    document.getElementById('loginView').hidden = logged;
-    document.getElementById('mainView').hidden = !logged;
-    if (logged) {
-      var exp = Number(token.split('.')[0]);
-      document.getElementById('tokenInfo').textContent =
-        'ログイン済み（合言葉の期限: ' + new Date(exp).toLocaleDateString('ja-JP') + '）';
+    if (!S.token) return;
+    var days = weekDays(S.week);
+    var wdName = WD[weekdayIdx(S.today)];
+    $('menuBtn').textContent = '営業日 ' + S.today.m + '/' + S.today.d + '（' + wdName + '）';
+
+    $('pname').innerHTML = esc(S.tai ? '体入' : (S.person || '—')) + '<small>' + (S.tai ? '名前なしの枠' : '') + '</small>';
+    [].forEach.call($('seg').children, function (b) { b.className = Number(b.getAttribute('data-w')) === S.week ? 'on' : ''; });
+    var a = days[0], z = days[6];
+    $('range').textContent = a.m + '/' + a.d + '（月）〜 ' + z.m + '/' + z.d + '（日）';
+
+    // シートがない月のお知らせ
+    var missing = [], seen = {};
+    days.forEach(function (d) { var mo = S.months[d.key]; if (mo && mo.status === 'none' && !seen[d.key]) { seen[d.key] = 1; missing.push(d.key); } });
+    var nt = $('notice');
+    nt.hidden = !missing.length;
+    nt.textContent = missing.length ? missing.join('、') + ' のシートが、まだありません' : '';
+
+    renderDays(days);
+    renderChips($('inChips'), S.tai ? IN_VALS : IN_VALS.concat(['同']), 'inV');
+    renderChips($('outChips'), OUT_VALS, 'outV');
+    var delMode = S.tai && S.clear;
+    $('inSec').hidden = delMode;
+    $('outSec').hidden = S.tai;
+    $('taiSec').hidden = !S.tai || delMode;
+    $('retai').checked = S.retai;
+    $('maru').hidden = S.tai;
+    $('rowBtns').className = 'row-btns' + (S.tai ? ' one' : '');
+    $('maru').className = S.maru ? 'on' : '';
+    $('clear').className = S.clear ? 'on' : '';
+    $('clear').textContent = S.tai ? (S.clear ? '消すのをやめる' : '体入を消す') : '選んだ日をクリア';
+    renderPreview();
+  }
+
+  function renderChips(el, vals, key) {
+    el.innerHTML = '';
+    var none = document.createElement('button');
+    none.className = 'chip dim' + (S[key] === '' ? ' on' : ''); none.textContent = '空';
+    none.onclick = function () { S[key] = ''; S.maru = false; S.clear = false; render(); };
+    el.appendChild(none);
+    vals.forEach(function (v) {
+      var b = document.createElement('button');
+      b.className = 'chip' + (S[key] === v ? ' on' : ''); b.textContent = v;
+      b.onclick = function () { S[key] = v; S.maru = false; S.clear = false; render(); };
+      el.appendChild(b);
+    });
+  }
+
+  function renderDays(days) {
+    var box = $('days'); box.innerHTML = '';
+    var nv = newValue();
+    days.forEach(function (day) {
+      var info = dayInfo(day);
+      if (S.tai && S.clear && info.usable) { box.appendChild(delRow(day, info)); return; }
+      var sel = !!S.sel[day.idx] && info.usable;
+      var d = document.createElement('div');
+      d.className = 'day' + (info.usable ? '' : ' off') + (sel ? ' sel' : '') + (day.past ? ' past' : '');
+      var h = '<span class="box">' + (sel ? '✓' : '') + '</span>' +
+              '<span class="d">' + WD[day.idx] + '<small>' + day.m + '/' + day.d + '</small></span>';
+      if (!info.usable) {
+        h += '<span class="pill">' + esc(info.note) + '</span>';
+      } else if (sel && nv !== undefined && S.tai && nv !== null) {
+        h += '<span class="wrap">' + (info.cur ? '<span class="pill">' + esc(info.cur) + '</span><span class="arrow">＋</span>' : '') +
+             '<span class="pill new">' + esc(nv) + '</span></span>';
+      } else if (sel && nv !== undefined && info.cur !== (nv === null ? '' : nv)) {
+        h += '<span class="wrap"><span class="pill was' + (info.cur ? '' : ' empty') + '">' + (info.cur ? esc(info.cur) : '—') + '</span>' +
+             '<span class="arrow">→</span><span class="pill new">' + (nv === null ? '空' : esc(nv)) + '</span></span>';
+      } else {
+        h += '<span class="pill' + (info.cur ? '' : ' empty') + '">' + (info.cur ? esc(info.cur) : '—') + '</span>';
+      }
+      d.innerHTML = h;
+      if (info.usable) d.onclick = function () { S.sel[day.idx] = S.sel[day.idx] ? 0 : 1; render(); };
+      box.appendChild(d);
+    });
+  }
+
+  // 体入を消すモード：その日の体入を1件ずつ、タップで選ぶ（日の欄をタップすると、その日の分をまとめて選ぶ）
+  function delRow(day, info) {
+    var d = document.createElement('div');
+    var any = info.entries.some(function (e) { return S.taiDel[day.idx + ':' + e.row]; });
+    d.className = 'day' + (any ? ' sel' : '') + (day.past ? ' past' : '');
+    var h = '<span class="box">' + (any ? '✓' : '') + '</span><span class="d">' + WD[day.idx] + '<small>' + day.m + '/' + day.d + '</small></span>' +
+      '<span class="wrap ents">' + (info.entries.length
+        ? info.entries.map(function (e) { return '<span class="pill ent' + (S.taiDel[day.idx + ':' + e.row] ? ' del' : '') + '" data-row="' + e.row + '">' + esc(e.v) + '</span>'; }).join('')
+        : '<span class="pill empty">—</span>') + '</span>';
+    d.innerHTML = h;
+    d.onclick = function (ev) {
+      var t = ev.target.closest ? ev.target.closest('.ent') : null;
+      if (t) { var k = day.idx + ':' + t.getAttribute('data-row'); if (S.taiDel[k]) delete S.taiDel[k]; else S.taiDel[k] = 1; }
+      else {
+        var all = info.entries.length && info.entries.every(function (e) { return S.taiDel[day.idx + ':' + e.row]; });
+        info.entries.forEach(function (e) { var k = day.idx + ':' + e.row; if (all) delete S.taiDel[k]; else S.taiDel[k] = 1; });
+      }
+      render();
+    };
+    return d;
+  }
+
+  function renderPreview() {
+    var p = plan(), pv = $('preview'), sv = $('save');
+    var who = S.tai ? '体入' : (S.person || '');
+    var selected = Object.keys(S.sel).filter(function (k) { return S.sel[k]; }).length;
+    sv.disabled = true; sv.textContent = '保存'; sv.className = 'save';
+    if (S.saving) { pv.textContent = '保存しています …'; sv.textContent = '保存しています'; return; }
+    if (S.tai && S.clear) {
+      if (!p.count) { pv.textContent = '消す体入を、タップして選んでください（日の欄をタップすると、その日の分を全部選びます）'; return; }
+      pv.innerHTML = '<b>体入</b> の ' + p.count + '件を <b>空（クリア）</b>にします<br><span class="ow">入力済みの ' + p.count + '件が消えます</span>';
+      sv.disabled = false; sv.textContent = p.count + '件を消す'; sv.className = 'save danger';
+      return;
+    }
+    if (!selected) { pv.textContent = '日付を選んでください'; return; }
+    if (p.nv === undefined) { pv.textContent = S.tai ? '入りを選んでください' : '入りか上がりを選んでください'; return; }
+    if (p.problem) { pv.innerHTML = '<span class="bad">' + esc(p.problem) + '</span>'; return; }
+    if (!p.count) { pv.textContent = S.clear ? '消す体入は、ありません' : '選べる日がありません'; return; }
+    var what = p.nv === null ? '<b>空（クリア）</b>' : '<b>「' + esc(p.nv) + '」</b>';
+    var unit = '日分';
+    pv.innerHTML = '<b>' + esc(who) + '</b> の ' + p.count + unit + 'を ' + what + (p.nv === null ? 'にします' : 'で書き込みます') +
+      (p.ow ? '<br><span class="ow">' + (p.nv === null ? '入力済みの ' + p.ow + '日分が消えます' : 'うち ' + p.ow + '日は上書きになります') + '</span>' : '');
+    sv.disabled = false; sv.textContent = p.count + unit + 'を保存';
+  }
+
+  // ---- 保存 -----------------------------------------------------------------
+  function applyUpdate(key, updated) {
+    var mo = S.months[key];
+    updated.forEach(function (u) {
+      mo.cells[u.row] = mo.cells[u.row] || {};
+      if (u.display) mo.cells[u.row][u.day] = u.display; else delete mo.cells[u.row][u.day];
+    });
+  }
+
+  function errText(r) {
+    switch (r && r.error) {
+      case 'nosheet': return 'シートが見つかりません';
+      case 'rowchanged': return '名前の位置が変わっています。更新してください';
+      case 'badday': case 'badrow': return 'シートの形が変わっています。更新してください';
+      case 'badvalue': return 'この値は書き込めません';
+      case 'server': return 'サーバーでエラーが起きました';
+      default: return '保存できませんでした';
     }
   }
 
-  document.getElementById('loginBtn').onclick = function () {
-    var started = performance.now();
-    show('ログインしています …');
-    api({ api: 'login', pin: pinEl.value }).then(function (r) {
-      var ms = Math.round(performance.now() - started);
-      if (r.ok) {
-        set(KEY, r.token);
-        pinEl.value = '';
-        render();
-        show('ログインできました（' + ms + 'ms）。合言葉を保存しました。');
-      } else if (r.error === 'locked') {
-        show('間違いが続いたため、しばらく入力できません（' + ms + 'ms）');
-      } else if (r.error === 'wrong') {
-        show('PINが違います。あと ' + r.remaining + ' 回で、しばらく入力できなくなります（' + ms + 'ms）');
-      } else {
-        show('エラー: ' + JSON.stringify(r));
-      }
-    }).catch(function (e) { show('通信に失敗しました: ' + e); });
-  };
+  function doSave(force) {
+    var p = plan();
+    if (S.saving || !p.count || p.problem || p.nv === undefined) return;
+    S.saving = true; render();
+    var chain = Promise.resolve({ ok: true });
+    Object.keys(p.groups).forEach(function (k) {
+      var g = p.groups[k]; if (!g.cells.length) return;
+      chain = chain.then(function (prev) {
+        if (!prev.ok) return prev;
+        return api({ api: 'save', token: S.token, sheet: k, name: S.tai ? null : S.person, value: p.nv, cells: g.cells, force: !!force })
+          .then(function (r) { r.key = k; if (r.ok) applyUpdate(k, r.updated); return r; });
+      });
+    });
+    chain.then(function (r) {
+      S.saving = false;
+      if (r.ok) { S.sel = {}; S.lastSync = Date.now(); toast('保存しました'); }
+      else if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
+      else if (r.error === 'conflict') showConflict(r);
+      else toast(errText(r));
+      render();
+    }).catch(function () {
+      S.saving = false; toast('通信に失敗しました。もう一度お試しください'); render();
+    });
+  }
 
-  document.getElementById('pingBtn').onclick = function () {
-    var started = performance.now();
-    show('通信しています …');
-    api({ api: 'ping', token: get(KEY) }).then(function (r) {
-      var ms = Math.round(performance.now() - started);
-      show('往復 ' + ms + 'ms\n' + JSON.stringify(r, null, 2) +
-        (r.authed ? '' : '\n※ 合言葉が無効です。ログインし直してください'));
-      if (!r.authed) { del(KEY); render(); }
-    }).catch(function (e) { show('通信に失敗しました: ' + e); });
-  };
+  // ---- ダイアログ -------------------------------------------------------------------
+  function closeDlg() { $('dlgRoot').innerHTML = ''; }
+  function openDlg(html, wire) {
+    $('dlgRoot').innerHTML = '<div class="veil" id="veil"></div><div class="sheet">' + html + '</div>';
+    $('veil').onclick = closeDlg;
+    wire();
+  }
+  function showConflict(r) {
+    var items = r.conflicts.map(function (c) {
+      return '<li>' + c.day + '日：<s>' + esc(c.expect || '空') + '</s> → 今は <b>' + esc(c.current || '空') + '</b></li>';
+    }).join('');
+    openDlg('<h2>シートが変更されています</h2><p>画面を開いてから、シートが直接書き換えられました。そのまま保存すると、上書きされます。</p><ul>' + items + '</ul>' +
+      '<div class="btns"><button class="main" id="dReload">最新の状態を読み込む</button><button class="danger" id="dForce">このまま上書きする</button><button id="dCancel">やめる</button></div>', function () {
+      $('dCancel').onclick = closeDlg;
+      $('dReload').onclick = function () { closeDlg(); loadMonth(r.key, true).then(render); };
+      $('dForce').onclick = function () { closeDlg(); doSave(true); };
+    });
+  }
+  function showMenu() {
+    var t = S.lastSync ? new Date(S.lastSync).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '—';
+    openDlg('<h2>メニュー</h2><p>最後に読み込んだ時刻：' + t + '</p>' +
+      '<div class="btns"><button class="main" id="mReload">最新の状態に更新</button><button class="danger" id="mLogout">ログアウト（合言葉を消す）</button><button id="mClose">閉じる</button></div>', function () {
+      $('mClose').onclick = closeDlg;
+      $('mReload').onclick = function () { closeDlg(); toast('更新しています …'); refreshAll(); };
+      $('mLogout').onclick = function () { closeDlg(); logout(''); };
+    });
+  }
 
-  document.getElementById('logoutBtn').onclick = function () {
-    del(KEY);
+  // ---- ログイン・ログアウト ---------------------------------------------------------
+  function showLogin(msg) {
+    $('appView').hidden = true; $('loginView').hidden = false;
+    $('loginMsg').textContent = msg || '';
+    setTimeout(function () { $('pin').focus(); }, 50);
+  }
+  function logout(msg) {
+    store.del(TOKEN_KEY); S.token = null; S.months = {}; S.sel = {}; S.person = null;
+    closeDlg(); showLogin(msg);
+  }
+  function doLogin() {
+    var pin = $('pin').value.trim(); if (!pin) return;
+    var btn = $('loginBtn'); btn.disabled = true; $('loginMsg').textContent = '';
+    api({ api: 'login', pin: pin }).then(function (r) {
+      btn.disabled = false;
+      if (r.ok) { store.set(TOKEN_KEY, r.token); S.token = r.token; $('pin').value = ''; start(); }
+      else if (r.error === 'locked') $('loginMsg').textContent = '間違いが続いたため、しばらく入力できません（約10分）';
+      else if (r.error === 'wrong') $('loginMsg').textContent = 'PINが違います。あと ' + r.remaining + ' 回で、しばらく入力できなくなります';
+      else if (r.error === 'setup') $('loginMsg').textContent = 'サーバーの設定が済んでいません';
+      else $('loginMsg').textContent = 'ログインできませんでした';
+    }).catch(function () { btn.disabled = false; $('loginMsg').textContent = '通信に失敗しました。もう一度お試しください'; });
+  }
+
+  // ---- 開始 -----------------------------------------------------------------
+  function start() {
+    $('loginView').hidden = true; $('appView').hidden = false;
+    S.today = businessToday(); S.week = 1; S.sel = {};
     render();
-    show('合言葉を消しました');
-  };
+    loadWeek(1).then(function () {
+      // 来週のシートがまだ無い（月末など）ときは、今週を開く
+      var ok = weekDays(1).some(function (d) { var mo = S.months[d.key]; return mo && mo.status === 'ok'; });
+      if (!ok) { S.week = 0; return loadWeek(0); }
+    }).then(render);
+  }
 
-  render();
+  function resetInput() { S.sel = {}; S.taiDel = {}; S.maru = false; S.clear = false; S.inV = null; S.outV = null; S.retai = false; }
+
+  function wire() {
+    $('loginBtn').onclick = doLogin;
+    $('pin').onkeydown = function (e) { if (e.key === 'Enter') doLogin(); };
+    $('menuBtn').onclick = showMenu;
+    $('pchange').onclick = function () { renderPicker(); $('picker').classList.toggle('open'); };
+    $('seg').onclick = function (e) {
+      var w = e.target.getAttribute('data-w'); if (w === null) return;
+      S.week = Number(w); S.sel = {}; S.taiDel = {}; render(); loadWeek(S.week);
+    };
+    $('maru').onclick = function () { S.maru = !S.maru; S.clear = false; render(); };
+    $('clear').onclick = function () { S.clear = !S.clear; S.maru = false; S.taiDel = {}; if (S.tai) S.sel = {}; render(); };
+    $('retai').onchange = function () { S.retai = this.checked; render(); };
+    $('save').onclick = function () { doSave(false); };
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) { S.hiddenAt = Date.now(); return; }
+      if (S.token && S.hiddenAt && Date.now() - S.hiddenAt > 120000) refreshAll();
+    });
+  }
+
+  function renderPicker() {
+    var g = $('pgrid'); g.innerHTML = '';
+    peopleList().forEach(function (name) {
+      var b = document.createElement('button'); b.textContent = name;
+      if (!S.tai && S.person === name) b.className = 'on';
+      b.onclick = function () { S.person = name; S.tai = false; store.set(PERSON_KEY, name); resetInput(); $('picker').classList.remove('open'); render(); };
+      g.appendChild(b);
+    });
+    var t = document.createElement('button'); t.className = 'tai' + (S.tai ? ' on' : ''); t.textContent = '体入（名前なし）';
+    t.onclick = function () { S.tai = true; resetInput(); $('picker').classList.remove('open'); render(); };
+    g.appendChild(t);
+  }
+
+  function init() {
+    wire();
+    if (MOCK && !qs.has('login')) { S.token = 'mock'; start(); return; }   // 開発用：?mock&login でログイン画面も試せる
+    S.token = store.get(TOKEN_KEY);
+    if (S.token) start(); else showLogin('');
+  }
+
+  // 開発用：外から状態を見る（本番では使わない）
+  window.__shift = { S: S, plan: plan, newValue: newValue, weekDays: weekDays, dayInfo: dayInfo };
+
+  if (MOCK) {
+    var s = document.createElement('script');
+    s.src = '../dev/mock-api.js';
+    s.onload = init; s.onerror = function () { document.body.textContent = 'dev/mock-api.js が見つかりません'; };
+    document.head.appendChild(s);
+  } else {
+    init();
+  }
+})();
 </script>
 </body>
 </html>
