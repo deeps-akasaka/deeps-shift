@@ -119,6 +119,10 @@
   .row .t { margin-left: auto; font-size: 16px; font-variant-numeric: tabular-nums; background: var(--pill); padding: 4px 12px; border-radius: 999px; white-space: nowrap; }
   .row.tai .n { color: var(--sub); }
   .empty { padding: 28px 16px; text-align: center; color: var(--sub); font-size: 14px; }
+  /* 閲覧専用（?view=鍵）：入力・設定に関わるものを隠す */
+  .view .gear, .view .hint { display: none; }
+  .view .tabbar { grid-template-columns: repeat(2, 1fr); }
+  .view .row, .view .mwrap td { cursor: default; }
   .hint { text-align: center; color: var(--faint); font-size: 12px; padding: 8px 0 10px; }
 
   /* 月（案A：全員×日付。名前の列と日付の行は固定） */
@@ -277,6 +281,7 @@
   var MARU = '〇';               // 表と同じ「〇」（U+3007）
 
   var qs = new URLSearchParams(location.search);
+  var VIEW = qs.get('view') || '';   // 閲覧専用のリンク（?view=鍵）。PINなしで、今日・月を見るだけ
   var MOCK = qs.has('mock');      // 開発用：偽の窓口で動かす（本番では使わない）
 
   // ---- 小さな道具 -----------------------------------------------------------
@@ -400,7 +405,8 @@
     var mo = S.months[key] = S.months[key] || { status: 'loading' };
     if (!silent || mo.status !== 'ok') mo.status = 'loading';
     render();
-    return api({ api: 'getMonth', token: S.token, sheet: key }).then(function (r) {
+    return api(VIEW ? { api: 'getMonth', view: VIEW, sheet: key } : { api: 'getMonth', token: S.token, sheet: key }).then(function (r) {
+      if (r.error === 'auth' && VIEW) { mo.checkedAt = Date.now(); mo.status = 'error'; toast('このリンクは使えません。新しいリンクをもらってください'); return; }
       if (r.error === 'auth') { logout('ログインの期限が切れました。もう一度ログインしてください'); return; }
       mo.checkedAt = Date.now();
       if (!r.ok) { mo.status = (r.error === 'nosheet') ? 'none' : 'error'; return; }
@@ -492,7 +498,7 @@
   function apply(fn) {                               // 選んでいる日だけに、下書きを入れる
     var days = selDays();
     if (!days.length) { toast('日付を選んでください'); return; }
-    if (Date.now() - S.lastApi > 40000) api({ api: 'ping', token: S.token }).catch(function () {});   // しばらく通信していなければ、GAS を起こしておく（保存の最初の1回を遅くしない）
+    if (Date.now() - S.lastApi > 40000) api(VIEW ? { api: 'ping', view: VIEW } : { api: 'ping', token: S.token }).catch(function () {});   // しばらく通信していなければ、GAS を起こしておく（保存の最初の1回を遅くしない）
     days.forEach(function (day) {
       var d = S.draft[day.idx] = S.draft[day.idx] || {};
       fn(d);
@@ -558,6 +564,7 @@
     $('tabbar').hidden = S.settings;
     [].forEach.call($('tabbar').children, function (b) {
       var k = b.getAttribute('data-tab');
+      if (VIEW && k === 'input') { b.hidden = true; return; }
       b.className = k === S.tab ? 'on' : '';
       if (!b.firstChild) b.innerHTML = TABS[k][1] + TABS[k][0];
     });
@@ -625,6 +632,7 @@
 
   // 今日・月から、その人とその日を選んだ入力タブを開く（name が null なら体入）
   function openInput(name, date) {
+    if (VIEW) return;   // 閲覧専用：入力は開かない
     var mon = addDays(date, -weekdayIdx(date)), tmon = addDays(S.today, -weekdayIdx(S.today));
     var w = Math.round((Date.UTC(mon.y, mon.m - 1, mon.d) - Date.UTC(tmon.y, tmon.m - 1, tmon.d)) / (7 * 86400000));
     if (w < 0 || w > 2) { toast('入力できるのは、今週〜再来週です'); return; }
@@ -1064,10 +1072,11 @@
   // ---- 開始 -----------------------------------------------------------------
   function start() {
     $('loginView').hidden = true; $('appView').hidden = false;
-    S.today = businessToday(); S.week = 1; S.tab = 'input'; S.settings = false; S.whoKey = ''; S.mKey = '';
+    S.today = businessToday(); S.week = 1; S.tab = VIEW ? 'today' : 'input'; S.settings = false; S.whoKey = ''; S.mKey = '';
     S.tDay = S.today; S.mMonth = { y: S.today.y, m: S.today.m };
     resetInput();
     render();
+    if (VIEW) return;   // 閲覧専用：シートは、今日・月の描画が読む
     loadWeek(1).then(function () {
       // 来週のシートがまだ無い（月末など）ときは、今週を開く
       var ok = weekDays(1).some(function (d) { var mo = S.months[d.key]; return mo && mo.status === 'ok'; });
@@ -1123,8 +1132,24 @@
     });
   }
 
+  function viewMode() {
+    document.documentElement.classList.add('view');
+    document.title = '出勤表（閲覧）';
+    // ホーム画面に追加しても、このリンク（鍵つき）で開くように
+    var mf = document.querySelector('link[rel=manifest]');
+    if (mf && window.Blob && URL.createObjectURL) {
+      var base = new URL('.', location.href).href;
+      var m = { name: '出勤表（閲覧）', short_name: '出勤表', start_url: location.href, scope: base, display: 'standalone', background_color: '#1c1c1e', theme_color: '#1c1c1e',
+        icons: [{ src: base + 'icon-192.png', sizes: '192x192', type: 'image/png' }, { src: base + 'icon-512.png', sizes: '512x512', type: 'image/png' }] };
+      mf.href = URL.createObjectURL(new Blob([JSON.stringify(m)], { type: 'application/manifest+json' }));
+    }
+    var t = document.querySelector('meta[name=apple-mobile-web-app-title]'); if (t) t.content = '出勤表';
+    S.token = 'view'; start();
+  }
+
   function init() {
     wire();
+    if (VIEW) { viewMode(); return; }
     if (MOCK && !qs.has('login')) { S.token = 'mock'; start(); return; }   // 開発用：?mock&login でログイン画面も試せる
     S.token = store.get(TOKEN_KEY);
     if (S.token) start(); else showLogin('');
